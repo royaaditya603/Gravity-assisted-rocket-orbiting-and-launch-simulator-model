@@ -41,7 +41,7 @@ export const Header: React.FC = () => {
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xs bg-[#e8e8e3] border border-[#d2d1cb] text-[10px] font-mono text-[#282a33]">
             <ShieldCheck size={13} className="text-emerald-600" />
             <span className="font-bold">VERIFIED:</span>
-            <span>34/34 AUTOMATED TESTS PASSING</span>
+            <span>65/65 AUTOMATED TESTS PASSING</span>
           </div>
           <a
             href="#mission-control"

@@ -6,3 +6,4 @@ export * from './OrbitClassifier';
 export * from './CollisionDetector';
 export * from './Integrators';
 export * from './GravityAssist';
+export * from './FlybyEngine';

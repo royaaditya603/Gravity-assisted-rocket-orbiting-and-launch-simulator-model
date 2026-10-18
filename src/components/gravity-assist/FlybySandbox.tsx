@@ -1,274 +1,223 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { GravityAssist, GravityAssistResult } from '../../physics/GravityAssist';
-import { Vector3D } from '../../physics/Vector3D';
-import { MU_MOON, R_MOON } from '../../physics/constants';
-import { ArrowRight, Compass, ShieldAlert, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import {
+  FlybyEngine,
+  FlybyInitialConditions,
+  FlybySimulationResult,
+  FlybyPassType,
+  ReferenceFrame,
+} from '../../physics/FlybyEngine';
+import { PLANETARY_BODIES, PlanetaryBodyData } from '../../physics/constants';
+import { Flyby3DCanvas, FlybyCameraMode } from './viewport/Flyby3DCanvas';
+import { FlybyControlDeck } from './controls/FlybyControlDeck';
+import { FlybyTelemetryHUD } from './hud/FlybyTelemetryHUD';
+import { FlybyCharts } from './charts/FlybyCharts';
+import { FlybyExperiments } from './experiments/FlybyExperiments';
+import { FlybyMissions } from './missions/FlybyMissions';
+import { Sparkles, Compass, ShieldAlert, Cpu } from 'lucide-react';
 
 export const FlybySandbox: React.FC = () => {
-  const [approachSpeed, setApproachSpeed] = useState<number>(2000.0); // 2,000 m/s
-  const [flybyAltKm, setFlybyAltKm] = useState<number>(250.0); // 250 km
-  const [passType, setPassType] = useState<'TRAILING' | 'LEADING'>('TRAILING');
-  const [result, setResult] = useState<GravityAssistResult | null>(null);
+  // Authoritative Initial Conditions State
+  const [selectedPlanet, setSelectedPlanet] = useState<PlanetaryBodyData>(PLANETARY_BODIES.JUPITER);
+  const [vInfSpeedMPerS, setVInfSpeedMPerS] = useState<number>(10000.0); // 10 km/s default
+  const [periapsisAltitudeKm, setPeriapsisAltitudeKm] = useState<number>(45000.0); // 45,000 km altitude
+  const [passType, setPassType] = useState<FlybyPassType>('TRAILING');
+  const [spacecraftMassKg, setSpacecraftMassKg] = useState<number>(1000.0); // 1,000 kg
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // View & Playback State
+  const [referenceFrame, setReferenceFrame] = useState<ReferenceFrame>('PLANET_CENTRIC');
+  const [cameraMode, setCameraMode] = useState<FlybyCameraMode>('OVERVIEW');
+  const [showVectors, setShowVectors] = useState<boolean>(true);
+  const [showTrajectoryTrail, setShowTrajectoryTrail] = useState<boolean>(true);
 
-  // Moving flyby body: Lunar-scale body (mu = 4.90e12, V_p = 1022 m/s orbiting central body)
-  const vPlanetMag = 1022.0; // m/s
-  const vPlanet = new Vector3D(0, vPlanetMag, 0);
+  const [isPlaying, setIsPlaying] = useState<boolean>(true);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(2.0);
+  const [currentPlaybackIndex, setCurrentPlaybackIndex] = useState<number>(0);
+
+  // Deterministically compute authoritative simulation result
+  const simResult: FlybySimulationResult = useMemo(() => {
+    const targetPeriapsisM = selectedPlanet.radiusM + periapsisAltitudeKm * 1000.0;
+    const config: FlybyInitialConditions = {
+      planet: selectedPlanet,
+      vInfSpeedMPerS,
+      targetPeriapsisM,
+      passType,
+      spacecraftMassKg,
+      approachAngleDeg: 0,
+    };
+    return FlybyEngine.runSimulation(config);
+  }, [selectedPlanet, vInfSpeedMPerS, periapsisAltitudeKm, passType, spacecraftMassKg]);
+
+  // Reset playback to start whenever physical configuration changes
+  useEffect(() => {
+    setCurrentPlaybackIndex(0);
+  }, [simResult]);
+
+  // Animation frame playback loop
+  const animRef = useRef<number>(0);
+  const lastTimeRef = useRef<number>(performance.now());
 
   useEffect(() => {
-    const rPeriapsis = R_MOON + flybyAltKm * 1000.0;
-    // Spacecraft incoming vector
-    const vIn = new Vector3D(approachSpeed * 0.8, approachSpeed * 0.6, 0);
-    const res = GravityAssist.computeFlyby(vIn, vPlanet, rPeriapsis, MU_MOON, passType);
-    setResult(res);
-
-    // Draw Vector Diagram
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const w = canvas.width;
-    const h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-
-    // Deep space dark canvas
-    ctx.fillStyle = '#08090d';
-    ctx.fillRect(0, 0, w, h);
-
-    // Grid lines
-    ctx.strokeStyle = '#181b24';
-    ctx.lineWidth = 1;
-    for (let x = 0; x < w; x += 30) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
-      ctx.stroke();
-    }
-    for (let y = 0; y < h; y += 30) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
+    if (!isPlaying || !simResult || simResult.trajectory.length === 0) {
+      return;
     }
 
-    const cx = w * 0.45;
-    const cy = h * 0.55;
-    const scale = 0.055; // Pixels per m/s
+    const stepLoop = (now: number) => {
+      const deltaMs = now - lastTimeRef.current;
+      lastTimeRef.current = now;
 
-    const drawVector = (vx: number, vy: number, color: string, label: string, startX = cx, startY = cy) => {
-      const endX = startX + vx * scale;
-      const endY = startY - vy * scale; // Invert Y for canvas
+      // Advance index based on playbackSpeed
+      // 1000 trajectory points; advance ~ 40 * playbackSpeed points per second
+      const pointsToAdvance = Math.max(1, Math.floor((deltaMs / 1000.0) * 45 * playbackSpeed));
 
-      ctx.strokeStyle = color;
-      ctx.fillStyle = color;
-      ctx.lineWidth = 2.2;
+      setCurrentPlaybackIndex((prev) => {
+        const next = prev + pointsToAdvance;
+        if (next >= simResult.trajectory.length) {
+          // Loop playback smoothly
+          return 0;
+        }
+        return next;
+      });
 
-      ctx.beginPath();
-      ctx.moveTo(startX, startY);
-      ctx.lineTo(endX, endY);
-      ctx.stroke();
-
-      // Arrowhead
-      const angle = Math.atan2(endY - startY, endX - startX);
-      const headLen = 7;
-      ctx.beginPath();
-      ctx.moveTo(endX, endY);
-      ctx.lineTo(endX - headLen * Math.cos(angle - Math.PI / 6), endY - headLen * Math.sin(angle - Math.PI / 6));
-      ctx.lineTo(endX - headLen * Math.cos(angle + Math.PI / 6), endY - headLen * Math.sin(angle + Math.PI / 6));
-      ctx.closePath();
-      ctx.fill();
-
-      // Label
-      ctx.font = '10px monospace';
-      ctx.fillText(label, endX + 6, endY - 4);
+      animRef.current = requestAnimationFrame(stepLoop);
     };
 
-    // Draw Planet Origin Circle
-    ctx.fillStyle = '#a8b3cf';
-    ctx.beginPath();
-    ctx.arc(cx, cy, 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#fff';
-    ctx.font = '10px monospace';
-    ctx.fillText('MOON / PLANET', cx - 40, cy + 20);
+    lastTimeRef.current = performance.now();
+    animRef.current = requestAnimationFrame(stepLoop);
 
-    // Vector 1: Planet velocity V_p (Cyan)
-    drawVector(vPlanet.x, vPlanet.y, '#38bdf8', `V_planet (${vPlanetMag.toFixed(0)} m/s)`);
+    return () => {
+      cancelAnimationFrame(animRef.current);
+    };
+  }, [isPlaying, playbackSpeed, simResult]);
 
-    // Vector 2: Incoming v_inf(-) (Amber)
-    drawVector(res.vInfMinusMPerS.x, res.vInfMinusMPerS.y, '#f59e0b', `v_inf(-) in planet frame`);
+  // Playback control callbacks
+  const handleTogglePlay = useCallback(() => {
+    setIsPlaying((prev) => !prev);
+  }, []);
 
-    // Vector 3: Outgoing v_inf(+) (Emerald)
-    drawVector(res.vInfPlusMPerS.x, res.vInfPlusMPerS.y, '#10b981', `v_inf(+) in planet frame`);
+  const handleReset = useCallback(() => {
+    setIsPlaying(false);
+    setCurrentPlaybackIndex(0);
+  }, []);
 
-    // Vector 4: Delta-V assist (Rose)
-    const infMinusEndX = cx + res.vInfMinusMPerS.x * scale;
-    const infMinusEndY = cy - res.vInfMinusMPerS.y * scale;
-    drawVector(res.deltaVAssistMPerS.x, res.deltaVAssistMPerS.y, '#f43f5e', 'Δv_assist', infMinusEndX, infMinusEndY);
-  }, [approachSpeed, flybyAltKm, passType]);
+  const handleStep = useCallback(() => {
+    setIsPlaying(false);
+    setCurrentPlaybackIndex((prev) => {
+      if (!simResult) return 0;
+      return Math.min(prev + 5, simResult.trajectory.length - 1);
+    });
+  }, [simResult]);
+
+  const handleSeek = useCallback((index: number) => {
+    setCurrentPlaybackIndex(index);
+  }, []);
+
+  // Preset loader callback for experiments and historical missions
+  const handleLoadPreset = useCallback((preset: Partial<FlybyInitialConditions>) => {
+    if (preset.planet) setSelectedPlanet(preset.planet);
+    if (preset.vInfSpeedMPerS !== undefined) setVInfSpeedMPerS(preset.vInfSpeedMPerS);
+    if (preset.passType) setPassType(preset.passType);
+    if (preset.spacecraftMassKg !== undefined) setSpacecraftMassKg(preset.spacecraftMassKg);
+
+    if (preset.targetPeriapsisM !== undefined) {
+      const p = preset.planet || selectedPlanet;
+      const altKm = (preset.targetPeriapsisM - p.radiusM) / 1000.0;
+      setPeriapsisAltitudeKm(altKm);
+    }
+
+    setIsPlaying(true);
+    setCurrentPlaybackIndex(0);
+  }, [selectedPlanet]);
 
   return (
-    <section id="gravity-assist-sandbox" className="w-full bg-[#0c0d12] text-white py-16 px-4 sm:px-8 border-t border-b border-[#222530]">
-      <div className="max-w-6xl mx-auto flex flex-col gap-8">
-        {/* Header */}
-        <div className="flex flex-col gap-2">
+    <section
+      id="gravity-assist-sandbox"
+      className="w-full bg-[#08090d] text-white py-16 px-4 sm:px-8 border-t border-b border-[#202535]"
+    >
+      <div className="max-w-7xl mx-auto flex flex-col gap-8">
+        {/* Section Header */}
+        <div className="flex flex-col gap-2.5">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-amber-400">
-              [ 05 // DEDICATED THREE-BODY SCENARIO ]
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+            <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-amber-400 font-bold">
+              [ 05 // DEDICATED MULTI-PLANET GRAVITY ASSIST ENGINE ]
             </span>
           </div>
-          <h2 className="text-3xl sm:text-5xl font-sans font-bold tracking-tight uppercase">
-            Planetary Gravity Assist Sandbox
+          <h2 className="text-3xl sm:text-5xl font-sans font-black tracking-tight uppercase">
+            Multi-Planet Gravity Assist Simulator
           </h2>
-          <p className="text-sm text-neutral-400 max-w-2xl leading-relaxed">
-            A gravity assist is <strong>not</strong> an ordinary closed orbit. It requires a moving third body to exchange momentum
-            in the central reference frame. Inside the planet's rest frame, the encounter is an unperturbed hyperbola where speed is
-            strictly conserved (<span className="text-amber-400 font-mono">||v_inf(+) || = ||v_inf(-)||</span>).
+          <p className="text-sm text-neutral-400 max-w-3xl leading-relaxed">
+            A planetary gravity assist is an unperturbed hyperbolic encounter in the planet's rest frame where speed is strictly
+            conserved (<span className="text-amber-400 font-mono">||v_∞(+) || = ||v_∞(-)||</span>). When transformed to the
+            Sun's heliocentric frame, orbital momentum is exchanged with the moving planet, delivering monumental velocity
+            boosts (<span className="text-emerald-400 font-mono">Δv_assist</span>) or high-efficiency gravitational braking.
           </p>
         </div>
 
-        {/* Interactive Controls & Diagram Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left: Controls & Readouts */}
-          <div className="lg:col-span-5 bg-[#12141c] border border-[#232736] p-5 rounded-xs flex flex-col gap-4">
-            <div className="text-xs font-mono font-bold uppercase tracking-wider text-neutral-300 border-b border-[#232736] pb-2">
-              FLYBY PARAMETERS
-            </div>
+        {/* 1. Main 3D Viewport & HUD */}
+        <div className="flex flex-col gap-3">
+          <Flyby3DCanvas
+            simResult={simResult}
+            currentPlaybackIndex={currentPlaybackIndex}
+            referenceFrame={referenceFrame}
+            cameraMode={cameraMode}
+            showVectors={showVectors}
+            showTrajectoryTrail={showTrajectoryTrail}
+            onCameraChange={setCameraMode}
+          />
 
-            {/* Pass Type Toggle */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-mono text-neutral-400 uppercase">Encounter Geometry</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setPassType('TRAILING')}
-                  className={`py-2 px-3 text-xs font-mono rounded-xs border transition-colors ${
-                    passType === 'TRAILING'
-                      ? 'bg-amber-500 text-black font-bold border-amber-400'
-                      : 'bg-[#181c28] text-neutral-400 border-[#282f42] hover:text-white'
-                  }`}
-                >
-                  TRAILING (ACCEL +)
-                </button>
-                <button
-                  onClick={() => setPassType('LEADING')}
-                  className={`py-2 px-3 text-xs font-mono rounded-xs border transition-colors ${
-                    passType === 'LEADING'
-                      ? 'bg-rose-500 text-white font-bold border-rose-400'
-                      : 'bg-[#181c28] text-neutral-400 border-[#282f42] hover:text-white'
-                  }`}
-                >
-                  LEADING (BRAKE -)
-                </button>
-              </div>
-            </div>
-
-            {/* Approach Speed */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex justify-between text-xs font-mono">
-                <span className="text-neutral-400">HYPERBOLIC EXCESS (v_inf)</span>
-                <span className="text-white font-bold">{approachSpeed.toFixed(0)} m/s</span>
-              </div>
-              <input
-                type="range"
-                min="800"
-                max="4500"
-                step="50"
-                value={approachSpeed}
-                onChange={(e) => setApproachSpeed(parseFloat(e.target.value))}
-                className="w-full accent-amber-500 bg-neutral-800 h-1.5 rounded-sm cursor-pointer"
-              />
-            </div>
-
-            {/* Periapsis Altitude */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex justify-between text-xs font-mono">
-                <span className="text-neutral-400">PERIAPSIS ALTITUDE (hp)</span>
-                <span className="text-white font-bold">{flybyAltKm.toFixed(0)} km</span>
-              </div>
-              <input
-                type="range"
-                min="50"
-                max="1500"
-                step="25"
-                value={flybyAltKm}
-                onChange={(e) => setFlybyAltKm(parseFloat(e.target.value))}
-                className="w-full accent-sky-500 bg-neutral-800 h-1.5 rounded-sm cursor-pointer"
-              />
-            </div>
-
-            {/* Calculated Results Box */}
-            {result && (
-              <div className="bg-[#181b26] p-4 rounded-xs border border-[#282e42] flex flex-col gap-2.5 text-xs">
-                <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 border-b border-[#282e42] pb-1">
-                  MOMENTUM & ENERGY CONVERSION
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <span className="text-neutral-400">Hyperbolic Turning Angle (δ):</span>
-                  <span className="font-mono font-bold text-amber-400">{result.deflectionAngleDeg.toFixed(1)}°</span>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <span className="text-neutral-400">Planet Rest-Frame Speed:</span>
-                  <span className="font-mono font-semibold text-emerald-400">
-                    {result.vInfSpeedMPerS.toFixed(0)} m/s (CONSTANT)
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <span className="text-neutral-400">Net Vector Boost (||Δv||):</span>
-                  <span className="font-mono font-bold text-rose-400">
-                    {result.deltaVAssistMagnitudeMPerS.toFixed(0)} m/s
-                  </span>
-                </div>
-
-                <div className="border-t border-[#282e42] pt-2 flex justify-between items-center">
-                  <span className="text-neutral-400">Central Frame Speed Change:</span>
-                  <span className={`font-mono font-bold text-sm ${result.isAcceleration ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {result.vInCentralSpeedMPerS.toFixed(0)} → {result.vOutCentralSpeedMPerS.toFixed(0)} m/s
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Right: Vector Diagram Canvas */}
-          <div className="lg:col-span-7 bg-[#12141c] border border-[#232736] p-4 rounded-xs flex flex-col gap-3">
-            <div className="flex items-center justify-between text-xs font-mono text-neutral-400">
-              <span className="uppercase tracking-wider">HYPERBOLIC ENCOUNTER VECTOR TRIANGLE</span>
-              <span className="text-neutral-500">[ 2D PLANE PROJECTION ]</span>
-            </div>
-
-            <canvas
-              ref={canvasRef}
-              width={640}
-              height={360}
-              className="w-full h-auto rounded-xs border border-[#1f2330]"
-            />
-
-            <div className="flex flex-wrap items-center gap-4 text-[11px] font-mono text-neutral-400 pt-1">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#38bdf8]" />
-                <span>Planet Velocity (V_p)</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" />
-                <span>Incoming v_inf(-)</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#10b981]" />
-                <span>Outgoing v_inf(+)</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#f43f5e]" />
-                <span>Delta-V Boost</span>
-              </div>
-            </div>
-          </div>
+          <FlybyTelemetryHUD
+            simResult={simResult}
+            currentPlaybackIndex={currentPlaybackIndex}
+            referenceFrame={referenceFrame}
+          />
         </div>
+
+        {/* 2. Interactive Control Deck */}
+        <FlybyControlDeck
+          selectedPlanet={selectedPlanet}
+          onSelectPlanet={setSelectedPlanet}
+          vInfSpeedMPerS={vInfSpeedMPerS}
+          onChangeVInf={setVInfSpeedMPerS}
+          periapsisAltitudeKm={periapsisAltitudeKm}
+          onChangePeriapsisAltitude={setPeriapsisAltitudeKm}
+          passType={passType}
+          onChangePassType={setPassType}
+          spacecraftMassKg={spacecraftMassKg}
+          onChangeSpacecraftMass={setSpacecraftMassKg}
+          referenceFrame={referenceFrame}
+          onChangeReferenceFrame={setReferenceFrame}
+          cameraMode={cameraMode}
+          onChangeCameraMode={setCameraMode}
+          isPlaying={isPlaying}
+          onTogglePlay={handleTogglePlay}
+          onReset={handleReset}
+          onStep={handleStep}
+          playbackSpeed={playbackSpeed}
+          onChangePlaybackSpeed={setPlaybackSpeed}
+          currentStepIndex={currentPlaybackIndex}
+          totalSteps={simResult.trajectory.length}
+          onSeek={handleSeek}
+          showVectors={showVectors}
+          onToggleVectors={() => setShowVectors((prev) => !prev)}
+          showTrajectoryTrail={showTrajectoryTrail}
+          onToggleTrajectoryTrail={() => setShowTrajectoryTrail((prev) => !prev)}
+        />
+
+        {/* 3. Real-Time Telemetry & Physics Charts */}
+        <FlybyCharts
+          simResult={simResult}
+          currentPlaybackIndex={currentPlaybackIndex}
+          referenceFrame={referenceFrame}
+        />
+
+        {/* 4. Controlled Astrodynamics Experiments (A — F) */}
+        <FlybyExperiments onLoadPreset={handleLoadPreset} />
+
+        {/* 5. Historical Missions Dossier (Voyager 2, Cassini, Mariner 10) */}
+        <FlybyMissions onLoadPreset={handleLoadPreset} />
       </div>
     </section>
   );
 };
+
+export default FlybySandbox;

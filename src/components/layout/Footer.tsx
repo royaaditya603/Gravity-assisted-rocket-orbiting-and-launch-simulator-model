@@ -24,11 +24,11 @@ export const Footer: React.FC = () => {
             <div className="flex items-center gap-2 pt-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-xs font-mono font-bold text-[#111215]">
-                PHYSICS VERIFICATION LEDGER // 52 AUTOMATED TESTS PASSING
+                PHYSICS VERIFICATION LEDGER // 65 AUTOMATED TESTS PASSING
               </span>
             </div>
             <div className="text-[10px] font-mono text-[#777a88]">
-              Automated Vitest suite across 9 test files verified at 2026-10-18T15:45:33+05:30. Zero hardcoded mock results.
+              Automated Vitest suite across 10 test files verified at 2026-10-18T16:22:40+05:30. Zero hardcoded mock results.
             </div>
           </div>
 

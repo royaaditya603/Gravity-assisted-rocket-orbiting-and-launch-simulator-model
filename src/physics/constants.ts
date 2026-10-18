@@ -26,6 +26,73 @@ export const H_ATMOSPHERE = 100000.0; // m (100.0 km - Kármán line boundary fo
 export const MU_MOON = 4.9048695e12; // m^3 / s^2
 export const R_MOON = 1737400.0; // m (1,737.4 km)
 
+// Solar System Gravitational Parameters & Planetary Reference (IAU / NASA Planetary Fact Sheets)
+export const MU_SUN = 1.32712440018e20; // m^3 / s^2 (Standard gravitational parameter of Sun)
+export const AU = 149597870700.0; // m (Astronomical Unit)
+
+export interface PlanetaryBodyData {
+  id: string;
+  name: string;
+  mu: number; // m^3 / s^2
+  radiusM: number; // m (mean volumetric physical radius)
+  semiMajorAxisM: number; // m
+  orbitalSpeedMPerS: number; // m/s (circular speed sqrt(mu_Sun / a))
+  massKg: number; // kg
+  color: string;
+  description: string;
+  ringInnerRadiusM?: number;
+  ringOuterRadiusM?: number;
+}
+
+export const PLANETARY_BODIES: Record<string, PlanetaryBodyData> = {
+  JUPITER: {
+    id: 'JUPITER',
+    name: 'Jupiter',
+    mu: 1.26686534e17, // m^3 / s^2 (GM_J)
+    radiusM: 69911000.0, // 69,911 km mean volumetric radius
+    semiMajorAxisM: 778570000000.0, // 5.204 AU
+    orbitalSpeedMPerS: Math.sqrt(1.32712440018e20 / 778570000000.0), // ~13,056 m/s (~13.06 km/s)
+    massKg: 1.89813e27,
+    color: '#d4a373',
+    description: 'Gas giant with immense gravitational well. Primary planetary accelerator for outer solar system missions.',
+  },
+  SATURN: {
+    id: 'SATURN',
+    name: 'Saturn',
+    mu: 3.7931187e16, // m^3 / s^2 (GM_S)
+    radiusM: 58232000.0, // 58,232 km mean volumetric radius
+    semiMajorAxisM: 1433530000000.0, // 9.582 AU
+    orbitalSpeedMPerS: Math.sqrt(1.32712440018e20 / 1433530000000.0), // ~9,618 m/s (~9.62 km/s)
+    massKg: 5.6834e26,
+    color: '#e0cda9',
+    description: 'Second largest gas giant with prominent rings. Used by Voyager and Cassini for trajectory shaping.',
+    ringInnerRadiusM: 74500000.0, // 74,500 km
+    ringOuterRadiusM: 136775000.0, // 136,775 km
+  },
+  EARTH: {
+    id: 'EARTH',
+    name: 'Earth',
+    mu: MU_EARTH,
+    radiusM: R_EARTH,
+    semiMajorAxisM: AU,
+    orbitalSpeedMPerS: Math.sqrt(1.32712440018e20 / AU), // ~29,784 m/s
+    massKg: 5.9722e24,
+    color: '#4f9fff',
+    description: 'Home world and initial launch platform. Often used for resonant flyby assists (e.g. Cassini, Galileo).',
+  },
+  VENUS: {
+    id: 'VENUS',
+    name: 'Venus',
+    mu: 3.24859e14,
+    radiusM: 6051800.0,
+    semiMajorAxisM: 108208000000.0, // 0.723 AU
+    orbitalSpeedMPerS: Math.sqrt(1.32712440018e20 / 108208000000.0), // ~35,020 m/s
+    massKg: 4.8675e24,
+    color: '#e6a15c',
+    description: 'Dense terrestrial planet used for inner-solar system gravity braking and outbound slingshots.',
+  },
+};
+
 // Canonical Verification Benchmarks (calculated strictly against R_EARTH = 6,371,000.0 m)
 export const BENCHMARKS = {
   SURFACE: {
