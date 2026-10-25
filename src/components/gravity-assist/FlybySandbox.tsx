@@ -7,6 +7,19 @@ import {
   ReferenceFrame,
 } from '../../physics/FlybyEngine';
 import { PLANETARY_BODIES, PlanetaryBodyData } from '../../physics/constants';
+import {
+  FlybyScenarioConfig,
+  DEFAULT_FLYBY_SCENARIO,
+  createScenarioFromPreset,
+  scenarioToInitialConditions,
+  loadSavedScenarios,
+  saveScenario,
+  deleteScenario,
+  duplicateScenario,
+  exportScenarioToJSON,
+  importScenarioFromJSON,
+  validateScenario,
+} from '../../physics/FlybyScenario';
 import { Flyby3DCanvas, FlybyCameraMode } from './viewport/Flyby3DCanvas';
 import { FlybyControlDeck } from './controls/FlybyControlDeck';
 import { FlybyTelemetryHUD } from './hud/FlybyTelemetryHUD';
@@ -16,12 +29,12 @@ import { FlybyMissions } from './missions/FlybyMissions';
 import { Sparkles, Compass, ShieldAlert, Cpu } from 'lucide-react';
 
 export const FlybySandbox: React.FC = () => {
-  // Authoritative Initial Conditions State
-  const [selectedPlanet, setSelectedPlanet] = useState<PlanetaryBodyData>(PLANETARY_BODIES.JUPITER);
-  const [vInfSpeedMPerS, setVInfSpeedMPerS] = useState<number>(10000.0); // 10 km/s default
-  const [periapsisAltitudeKm, setPeriapsisAltitudeKm] = useState<number>(45000.0); // 45,000 km altitude
-  const [passType, setPassType] = useState<FlybyPassType>('TRAILING');
-  const [spacecraftMassKg, setSpacecraftMassKg] = useState<number>(1000.0); // 1,000 kg
+  // Authoritative Scenario State
+  const [scenario, setScenario] = useState<FlybyScenarioConfig>(DEFAULT_FLYBY_SCENARIO);
+  const [draftScenario, setDraftScenario] = useState<FlybyScenarioConfig>(DEFAULT_FLYBY_SCENARIO);
+  const lastValidScenarioRef = useRef<FlybyScenarioConfig>(DEFAULT_FLYBY_SCENARIO);
+  const [autoApply, setAutoApply] = useState<boolean>(true);
+  const [savedScenarios, setSavedScenarios] = useState<FlybyScenarioConfig[]>(() => loadSavedScenarios());
 
   // View & Playback State
   const [referenceFrame, setReferenceFrame] = useState<ReferenceFrame>('PLANET_CENTRIC');
@@ -33,61 +46,32 @@ export const FlybySandbox: React.FC = () => {
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(2.0);
   const [currentPlaybackIndex, setCurrentPlaybackIndex] = useState<number>(0);
 
-  // Deterministically compute authoritative simulation result
-  const simResult: FlybySimulationResult = useMemo(() => {
-    const targetPeriapsisM = selectedPlanet.radiusM + periapsisAltitudeKm * 1000.0;
-    const config: FlybyInitialConditions = {
-      planet: selectedPlanet,
-      vInfSpeedMPerS,
-      targetPeriapsisM,
-      passType,
-      spacecraftMassKg,
-      approachAngleDeg: 0,
-    };
-    return FlybyEngine.runSimulation(config);
-  }, [selectedPlanet, vInfSpeedMPerS, periapsisAltitudeKm, passType, spacecraftMassKg]);
+  // Check if draft has unsaved / unapplied modifications
+  const isDraftStale = useMemo(() => {
+    return JSON.stringify(scenario) !== JSON.stringify(draftScenario);
+  }, [scenario, draftScenario]);
 
-  // Reset playback to start whenever physical configuration changes
+  // Deterministically compute authoritative simulation result from active scenario
+  const simResult: FlybySimulationResult = useMemo(() => {
+    const { config, options } = scenarioToInitialConditions(scenario);
+    return FlybyEngine.runSimulation(config, options);
+  }, [scenario]);
+
+  // Reset playback to start whenever authoritative physical configuration changes
   useEffect(() => {
     setCurrentPlaybackIndex(0);
   }, [simResult]);
 
-  // Animation frame playback loop
-  const animRef = useRef<number>(0);
-  const lastTimeRef = useRef<number>(performance.now());
+  // Animation frame playback loop - synchronized with 3D canvas
+  const debounceTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!isPlaying || !simResult || simResult.trajectory.length === 0) {
-      return;
-    }
-
-    const stepLoop = (now: number) => {
-      const deltaMs = now - lastTimeRef.current;
-      lastTimeRef.current = now;
-
-      // Advance index based on playbackSpeed
-      // 1000 trajectory points; advance ~ 40 * playbackSpeed points per second
-      const pointsToAdvance = Math.max(1, Math.floor((deltaMs / 1000.0) * 45 * playbackSpeed));
-
-      setCurrentPlaybackIndex((prev) => {
-        const next = prev + pointsToAdvance;
-        if (next >= simResult.trajectory.length) {
-          // Loop playback smoothly
-          return 0;
-        }
-        return next;
-      });
-
-      animRef.current = requestAnimationFrame(stepLoop);
-    };
-
-    lastTimeRef.current = performance.now();
-    animRef.current = requestAnimationFrame(stepLoop);
-
     return () => {
-      cancelAnimationFrame(animRef.current);
+      if (debounceTimerRef.current !== null) {
+        window.clearTimeout(debounceTimerRef.current);
+      }
     };
-  }, [isPlaying, playbackSpeed, simResult]);
+  }, []);
 
   // Playback control callbacks
   const handleTogglePlay = useCallback(() => {
@@ -111,22 +95,170 @@ export const FlybySandbox: React.FC = () => {
     setCurrentPlaybackIndex(index);
   }, []);
 
+  // Update draft and smoothly debounced auto-apply
+  const handleUpdateDraft = useCallback(
+    (updater: (prev: FlybyScenarioConfig) => FlybyScenarioConfig) => {
+      setDraftScenario((prev) => {
+        const next = updater(prev);
+        const validation = validateScenario(next);
+        if (validation.isValid) {
+          lastValidScenarioRef.current = next;
+          if (autoApply) {
+            if (debounceTimerRef.current !== null) {
+              window.clearTimeout(debounceTimerRef.current);
+            }
+            debounceTimerRef.current = window.setTimeout(() => {
+              setScenario(next);
+            }, 60);
+          }
+        }
+        return next;
+      });
+    },
+    [autoApply]
+  );
+
+  const handleApplySettings = useCallback(() => {
+    const validation = validateScenario(draftScenario);
+    if (validation.isValid) {
+      setScenario(draftScenario);
+      lastValidScenarioRef.current = draftScenario;
+      setCurrentPlaybackIndex(0);
+    } else {
+      alert(`Invalid configuration: ${validation.errors.join('; ')}`);
+    }
+  }, [draftScenario]);
+
+  const handleResetToPreset = useCallback(() => {
+    const presetKey = (draftScenario.planet.presetId as any) || 'JUPITER';
+    const newScenario = createScenarioFromPreset(
+      ['JUPITER', 'SATURN', 'EARTH', 'VENUS'].includes(presetKey) ? presetKey : 'JUPITER'
+    );
+    setDraftScenario(newScenario);
+    setScenario(newScenario);
+    lastValidScenarioRef.current = newScenario;
+    setCurrentPlaybackIndex(0);
+  }, [draftScenario.planet.presetId]);
+
+  const handleResetToDefaults = useCallback(() => {
+    setDraftScenario(DEFAULT_FLYBY_SCENARIO);
+    setScenario(DEFAULT_FLYBY_SCENARIO);
+    lastValidScenarioRef.current = DEFAULT_FLYBY_SCENARIO;
+    setCurrentPlaybackIndex(0);
+  }, []);
+
+  const handleSaveScenario = useCallback(
+    (customName?: string) => {
+      const nameToSave = customName || draftScenario.name;
+      const scenarioToSave = { ...draftScenario, name: nameToSave };
+      try {
+        saveScenario(scenarioToSave);
+        setSavedScenarios(loadSavedScenarios());
+      } catch (err) {
+        alert(String(err));
+      }
+    },
+    [draftScenario]
+  );
+
+  const handleLoadScenario = useCallback((loaded: FlybyScenarioConfig) => {
+    setDraftScenario(loaded);
+    setScenario(loaded);
+    lastValidScenarioRef.current = loaded;
+    setCurrentPlaybackIndex(0);
+  }, []);
+
+  const handleDuplicateScenario = useCallback(() => {
+    const cloned = duplicateScenario(draftScenario);
+    saveScenario(cloned);
+    setSavedScenarios(loadSavedScenarios());
+    setDraftScenario(cloned);
+    setScenario(cloned);
+  }, [draftScenario]);
+
+  const handleDeleteScenario = useCallback((id: string) => {
+    const remaining = deleteScenario(id);
+    setSavedScenarios(remaining);
+  }, []);
+
+  const handleExportJSON = useCallback(() => {
+    const jsonStr = exportScenarioToJSON(scenario);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `astra-flyby-scenario-${scenario.planet.name.toLowerCase()}-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [scenario]);
+
+  const handleImportJSON = useCallback((jsonStr: string) => {
+    const res = importScenarioFromJSON(jsonStr);
+    if (res.success && res.scenario) {
+      setDraftScenario(res.scenario);
+      setScenario(res.scenario);
+      lastValidScenarioRef.current = res.scenario;
+      setCurrentPlaybackIndex(0);
+    } else {
+      alert(`Import Failed: ${res.error}`);
+    }
+  }, []);
+
+  const handleRestoreLastValid = useCallback(() => {
+    const valid = lastValidScenarioRef.current;
+    setDraftScenario(valid);
+    setScenario(valid);
+    setCurrentPlaybackIndex(0);
+  }, []);
+
   // Preset loader callback for experiments and historical missions
   const handleLoadPreset = useCallback((preset: Partial<FlybyInitialConditions>) => {
-    if (preset.planet) setSelectedPlanet(preset.planet);
-    if (preset.vInfSpeedMPerS !== undefined) setVInfSpeedMPerS(preset.vInfSpeedMPerS);
-    if (preset.passType) setPassType(preset.passType);
-    if (preset.spacecraftMassKg !== undefined) setSpacecraftMassKg(preset.spacecraftMassKg);
+    setDraftScenario((prev) => {
+      const p = preset.planet || prev.planet;
+      const vInf = preset.vInfSpeedMPerS ?? prev.encounter.vInfSpeedMPerS;
+      const pass = preset.passType || prev.encounter.passType;
+      const mass = preset.spacecraftMassKg ?? prev.encounter.spacecraftMassKg;
+      let altKm = prev.encounter.periapsisAltitudeKm;
 
-    if (preset.targetPeriapsisM !== undefined) {
-      const p = preset.planet || selectedPlanet;
-      const altKm = (preset.targetPeriapsisM - p.radiusM) / 1000.0;
-      setPeriapsisAltitudeKm(altKm);
-    }
+      if (preset.targetPeriapsisM !== undefined) {
+        altKm = (preset.targetPeriapsisM - p.radiusM) / 1000.0;
+      }
+
+      const rpM = p.radiusM + altKm * 1000.0;
+      const bM = rpM > 0 ? FlybyEngine.periapsisToImpactParameter(rpM, vInf, p.mu) : 0;
+
+      const updated: FlybyScenarioConfig = {
+        ...prev,
+        planet: {
+          ...prev.planet,
+          presetId: 'id' in p ? p.id : (p as any).presetId || 'CUSTOM',
+          name: p.name,
+          radiusM: p.radiusM,
+          massKg: p.massKg,
+          mu: p.mu,
+          semiMajorAxisM: p.semiMajorAxisM,
+          orbitalSpeedMPerS: p.orbitalSpeedMPerS,
+          color: p.color,
+          isTheoretical: false,
+        },
+        encounter: {
+          ...prev.encounter,
+          vInfSpeedMPerS: vInf,
+          passType: pass,
+          spacecraftMassKg: mass,
+          periapsisAltitudeKm: altKm,
+          impactParameterKm: bM / 1000.0,
+        },
+      };
+
+      setScenario(updated);
+      lastValidScenarioRef.current = updated;
+      return updated;
+    });
 
     setIsPlaying(true);
     setCurrentPlaybackIndex(0);
-  }, [selectedPlanet]);
+  }, []);
 
   return (
     <section
@@ -162,7 +294,11 @@ export const FlybySandbox: React.FC = () => {
             cameraMode={cameraMode}
             showVectors={showVectors}
             showTrajectoryTrail={showTrajectoryTrail}
+            isPlaying={isPlaying}
+            playbackSpeed={playbackSpeed}
             onCameraChange={setCameraMode}
+            onReferenceFrameChange={setReferenceFrame}
+            onPlaybackIndexChange={handleSeek}
           />
 
           <FlybyTelemetryHUD
@@ -172,18 +308,54 @@ export const FlybySandbox: React.FC = () => {
           />
         </div>
 
-        {/* 2. Interactive Control Deck */}
+        {/* 2. Interactive Control Deck & Scenario Management */}
         <FlybyControlDeck
-          selectedPlanet={selectedPlanet}
-          onSelectPlanet={setSelectedPlanet}
-          vInfSpeedMPerS={vInfSpeedMPerS}
-          onChangeVInf={setVInfSpeedMPerS}
-          periapsisAltitudeKm={periapsisAltitudeKm}
-          onChangePeriapsisAltitude={setPeriapsisAltitudeKm}
-          passType={passType}
-          onChangePassType={setPassType}
-          spacecraftMassKg={spacecraftMassKg}
-          onChangeSpacecraftMass={setSpacecraftMassKg}
+          selectedPlanet={scenario.planet as any}
+          onSelectPlanet={(p) => {
+            handleUpdateDraft((prev) => ({
+              ...prev,
+              planet: {
+                ...prev.planet,
+                presetId: 'id' in p ? p.id : (p as any).presetId || 'CUSTOM',
+                name: p.name,
+                isTheoretical: false,
+                massKg: p.massKg,
+                radiusM: p.radiusM,
+                mu: p.mu,
+                semiMajorAxisM: p.semiMajorAxisM,
+                orbitalSpeedMPerS: p.orbitalSpeedMPerS,
+                color: p.color,
+              },
+            }));
+          }}
+          vInfSpeedMPerS={scenario.encounter.vInfSpeedMPerS}
+          onChangeVInf={(v) => {
+            handleUpdateDraft((prev) => ({
+              ...prev,
+              encounter: { ...prev.encounter, vInfSpeedMPerS: v },
+            }));
+          }}
+          periapsisAltitudeKm={scenario.encounter.periapsisAltitudeKm}
+          onChangePeriapsisAltitude={(alt) => {
+            handleUpdateDraft((prev) => ({
+              ...prev,
+              encounter: { ...prev.encounter, periapsisAltitudeKm: alt },
+            }));
+          }}
+          passType={scenario.encounter.passType}
+          onChangePassType={(pass) => {
+            handleUpdateDraft((prev) => ({
+              ...prev,
+              encounter: { ...prev.encounter, passType: pass },
+            }));
+          }}
+          spacecraftMassKg={scenario.encounter.spacecraftMassKg}
+          onChangeSpacecraftMass={(m) => {
+            handleUpdateDraft((prev) => ({
+              ...prev,
+              encounter: { ...prev.encounter, spacecraftMassKg: m },
+            }));
+          }}
           referenceFrame={referenceFrame}
           onChangeReferenceFrame={setReferenceFrame}
           cameraMode={cameraMode}
@@ -201,6 +373,24 @@ export const FlybySandbox: React.FC = () => {
           onToggleVectors={() => setShowVectors((prev) => !prev)}
           showTrajectoryTrail={showTrajectoryTrail}
           onToggleTrajectoryTrail={() => setShowTrajectoryTrail((prev) => !prev)}
+          // Scenario Props
+          scenario={scenario}
+          draftScenario={draftScenario}
+          onUpdateDraft={handleUpdateDraft}
+          onApplySettings={handleApplySettings}
+          onResetToPreset={handleResetToPreset}
+          onResetToDefaults={handleResetToDefaults}
+          onSaveScenario={handleSaveScenario}
+          onLoadScenario={handleLoadScenario}
+          onDuplicateScenario={handleDuplicateScenario}
+          onDeleteScenario={handleDeleteScenario}
+          onExportJSON={handleExportJSON}
+          onImportJSON={handleImportJSON}
+          onRestoreLastValid={handleRestoreLastValid}
+          isDraftStale={isDraftStale}
+          autoApply={autoApply}
+          onToggleAutoApply={() => setAutoApply((prev) => !prev)}
+          savedScenarios={savedScenarios}
         />
 
         {/* 3. Real-Time Telemetry & Physics Charts */}

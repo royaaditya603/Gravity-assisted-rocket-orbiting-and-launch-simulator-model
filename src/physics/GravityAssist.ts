@@ -6,14 +6,20 @@ export interface GravityAssistResult {
   vInfSpeedMPerS: number;
   deflectionAngleRad: number;
   deflectionAngleDeg: number;
-  deltaVAssistMPerS: Vector3D;
-  deltaVAssistMagnitudeMPerS: number;
+  deltaVAssistMPerS: Vector3D; // Vector velocity change (alias for deltaVVectorMPerS)
+  deltaVAssistMagnitudeMPerS: number; // Magnitude of vector velocity change
+  // Explicitly separate vector velocity change and scalar speed change per astrodynamics standards:
+  deltaVVectorMPerS: Vector3D; // v_out,Central - v_in,Central = vInfPlus - vInfMinus
+  deltaVVectorMagnitudeMPerS: number; // ||delta_v_vector||
+  deltaVSpeedMPerS: number; // ||v_out,Central|| - ||v_in,Central|| (scalar speed change)
   vOutCentralMPerS: Vector3D;
   vOutCentralSpeedMPerS: number;
   vInCentralSpeedMPerS: number;
   specificEnergyInitialJPerKg: number;
   specificEnergyFinalJPerKg: number;
-  deltaSpecificEnergyJPerKg: number;
+  deltaSpecificEnergyJPerKg: number; // delta_epsilon = 0.5 * (vOut^2 - vIn^2)
+  vPlanetDotDeltaVMPerS2: number; // V_planet . delta_v_vector (energy identity verification)
+  energyIdentityDiffJPerKg: number; // |deltaSpecificEnergy - vPlanetDotDeltaV|
   isAcceleration: boolean;
 }
 
@@ -28,6 +34,17 @@ export interface GravityAssistResult {
  *    cleanly at the SOI boundary.
  * 3. Point-Mass Spherical Planet: Planetary oblateness and atmospheric drag during flyby are neglected
  *    (periapsis distance r_p must remain above the planet's physical radius and atmosphere).
+ *
+ * GEOMETRIC SIGN CONVENTION:
+ * - In the planet rest frame: The encounter plane is spanned by vInfMinus and vPlanetCentral.
+ *   The normal vector k_hat = normalize(vInfMinus x vPlanetCentral).
+ * - Trailing Pass ('TRAILING'): Spacecraft passes behind the moving planet in its orbital path.
+ *   Gravitational force pulls the spacecraft in the direction of planetary motion, rotating
+ *   vInfMinus toward vPlanetCentral (+k_hat rotation). In typical geometries, this increases
+ *   central-frame speed and specific energy (delta_epsilon > 0).
+ * - Leading Pass ('LEADING'): Spacecraft passes in front of the moving planet in its orbital path.
+ *   Gravitational force pulls against planetary motion, rotating vInfMinus away from vPlanetCentral
+ *   (-k_hat rotation). In typical geometries, this causes gravity braking (delta_epsilon < 0).
  */
 export class GravityAssist {
   /**
@@ -56,6 +73,7 @@ export class GravityAssist {
 
     if (vInfSpeed <= 0.0 || periapsisRadiusM <= 0.0 || muPlanet <= 0.0) {
       const zero = new Vector3D(0, 0, 0);
+      const inSpeed = Math.sqrt(vInCentral.x * vInCentral.x + vInCentral.y * vInCentral.y + vInCentral.z * vInCentral.z);
       return {
         vInfMinusMPerS: zero,
         vInfPlusMPerS: zero,
@@ -64,17 +82,22 @@ export class GravityAssist {
         deflectionAngleDeg: 0,
         deltaVAssistMPerS: zero,
         deltaVAssistMagnitudeMPerS: 0,
+        deltaVVectorMPerS: zero,
+        deltaVVectorMagnitudeMPerS: 0,
+        deltaVSpeedMPerS: 0,
         vOutCentralMPerS: new Vector3D(vInCentral.x, vInCentral.y, vInCentral.z),
-        vOutCentralSpeedMPerS: Vector3D.dot(vInCentral, vInCentral),
-        vInCentralSpeedMPerS: Vector3D.dot(vInCentral, vInCentral),
-        specificEnergyInitialJPerKg: 0,
-        specificEnergyFinalJPerKg: 0,
+        vOutCentralSpeedMPerS: inSpeed,
+        vInCentralSpeedMPerS: inSpeed,
+        specificEnergyInitialJPerKg: 0.5 * inSpeed * inSpeed,
+        specificEnergyFinalJPerKg: 0.5 * inSpeed * inSpeed,
         deltaSpecificEnergyJPerKg: 0,
+        vPlanetDotDeltaVMPerS2: 0,
+        energyIdentityDiffJPerKg: 0,
         isAcceleration: false,
       };
     }
 
-    // 2. Hyperbolic turning angle: sin(delta / 2) = 1 / (1 + r_p * v_inf^2 / mu_p)
+    // 2. Hyperbolic turning angle: sin(delta / 2) = 1 / e, where e = 1 + (r_p * v_inf^2 / mu_p)
     const eHyperbola = 1.0 + (periapsisRadiusM * vInfSpeed * vInfSpeed) / muPlanet;
     const halfDelta = Math.asin(Math.min(1.0, 1.0 / eHyperbola));
     const deltaRad = 2.0 * halfDelta;
@@ -131,11 +154,18 @@ export class GravityAssist {
       vInCentral.x * vInCentral.x + vInCentral.y * vInCentral.y + vInCentral.z * vInCentral.z
     );
     const vOutSpeed = vOutCentral.magnitude();
+    const deltaVSpeed = vOutSpeed - vInSpeed;
 
-    // Specific kinetic energy change in parent frame: 0.5 * (vOut^2 - vIn^2) = V_planet . Delta_v
+    // Specific kinetic energy change in parent frame:
+    // delta_epsilon = 0.5 * (vOut^2 - vIn^2) = V_planet . Delta_v (exact for prescribed V_planet)
     const energyInit = 0.5 * vInSpeed * vInSpeed;
     const energyFinal = 0.5 * vOutSpeed * vOutSpeed;
     const deltaEnergy = energyFinal - energyInit;
+
+    // Energy identity check: V_planet . Delta_v
+    const vPlanetDotDeltaV =
+      vPlanetCentral.x * deltaV.x + vPlanetCentral.y * deltaV.y + vPlanetCentral.z * deltaV.z;
+    const energyIdentityDiff = Math.abs(deltaEnergy - vPlanetDotDeltaV);
 
     return {
       vInfMinusMPerS: vInfMinus,
@@ -145,12 +175,17 @@ export class GravityAssist {
       deflectionAngleDeg: deltaDeg,
       deltaVAssistMPerS: deltaV,
       deltaVAssistMagnitudeMPerS: deltaVMag,
+      deltaVVectorMPerS: deltaV,
+      deltaVVectorMagnitudeMPerS: deltaVMag,
+      deltaVSpeedMPerS: deltaVSpeed,
       vOutCentralMPerS: vOutCentral,
       vOutCentralSpeedMPerS: vOutSpeed,
       vInCentralSpeedMPerS: vInSpeed,
       specificEnergyInitialJPerKg: energyInit,
       specificEnergyFinalJPerKg: energyFinal,
       deltaSpecificEnergyJPerKg: deltaEnergy,
+      vPlanetDotDeltaVMPerS2: vPlanetDotDeltaV,
+      energyIdentityDiffJPerKg: energyIdentityDiff,
       isAcceleration: deltaEnergy > 0.0,
     };
   }

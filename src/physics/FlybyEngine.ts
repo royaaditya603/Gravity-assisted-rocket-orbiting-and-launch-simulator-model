@@ -14,6 +14,11 @@ export interface FlybyInitialConditions {
   impactParameterM?: number;
   passType: FlybyPassType;
   spacecraftMassKg: number;
+  // Optional custom kinematics and trajectory modes:
+  planetVelocityVectorMPerS?: Vector3D;
+  planetInitialPhaseDeg?: number;
+  simulationDurationS?: number;
+  trajectoryMode?: 'NUMERICAL_RK4' | 'ANALYTICAL_IDEAL';
 }
 
 export interface TrajectoryPoint {
@@ -25,6 +30,7 @@ export interface TrajectoryPoint {
   distanceFromCenterM: number;
   altitudeM: number;
   specificEnergyPlanetJPerKg: number;
+  gravitationalAccelerationMPerS2: number;
   // Sun-relative
   posSunM: Vector3D;
   velSunMPerS: Vector3D;
@@ -46,16 +52,34 @@ export interface FlybyAnalyticalSummary {
   deflectionAngleDeg: number;
   vInfMinusMPerS: Vector3D;
   vInfPlusMPerS: Vector3D;
-  deltaVAssistMPerS: Vector3D;
-  deltaVAssistMagnitudeMPerS: number;
+
+  // Planet-centric vector velocity changes
+  deltaVVectorMPerS: Vector3D;
+  deltaVVectorMagnitudeMPerS: number;
+  deltaVAssistMPerS: Vector3D; // Backward-compatible alias
+  deltaVAssistMagnitudeMPerS: number; // Backward-compatible alias
+
   // Heliocentric analytical asymptotes
   vInSunMPerS: Vector3D;
   vOutSunMPerS: Vector3D;
   vInSunSpeedMPerS: number;
   vOutSunSpeedMPerS: number;
-  deltaVSunSpeedMPerS: number;
+
+  // Heliocentric velocity and speed changes
+  deltaVVectorSunMPerS: Vector3D; // vOutSun - vInSun (identical to planet-centric deltaVVector)
+  deltaVSpeedMPerS: number; // |vOutSun| - |vInSun| (scalar speed change)
+  deltaVSunSpeedMPerS: number; // Backward-compatible alias
+
+  // Energy quantities
+  deltaSpecificEnergyJPerKg: number; // 0.5 * (|vOutSun|² - |vInSun|²)
+  deltaKineticEnergyJ: number; // spacecraftMassKg * deltaSpecificEnergyJPerKg
+  vPlanetDotDeltaVMPerS2: number; // V_planet · Δv_vector
+  energyIdentityDiffJPerKg: number; // |deltaSpecificEnergyJPerKg - vPlanetDotDeltaVMPerS2|
+
+  // Legacy aliases
   deltaKineticEnergyJPerKg: number;
   deltaTotalKineticEnergyJ: number;
+
   isAcceleration: boolean;
   isPhysicalCollision: boolean;
 }
@@ -99,24 +123,53 @@ export interface FlybySimulationResult {
  */
 export class FlybyEngine {
   /**
-   * Converts impact parameter b to periapsis radius r_p for hyperbolic excess speed v_inf:
-   * b² = r_p² + 2 * mu_p * r_p / v_inf²
-   * r_p = - (mu_p / v_inf²) + sqrt((mu_p / v_inf²)² + b²)
+   * Computes eccentricity e from periapsis radius r_p and hyperbolic excess speed v_inf:
+   * e = 1 + (r_p * v_inf² / mu)
    */
-  static impactParameterToPeriapsis(bM: number, vInfMPerS: number, muPlanet: number): number {
-    if (vInfMPerS <= 0 || muPlanet <= 0) return 0;
+  static eccentricityFromPeriapsis(rpM: number, vInfMPerS: number, muPlanet: number): number {
+    if (vInfMPerS <= 0 || muPlanet <= 0 || rpM <= 0) return 1.0;
+    return 1.0 + (rpM * vInfMPerS * vInfMPerS) / muPlanet;
+  }
+
+  /**
+   * Computes hyperbolic turning (deflection) angle delta from eccentricity e:
+   * delta = 2 * asin(1 / e)
+   */
+  static deflectionFromEccentricity(e: number): number {
+    if (e <= 1.0) return Math.PI; // Parabolic limit / maximum deflection
+    return 2.0 * Math.asin(1.0 / e);
+  }
+
+  /**
+   * Computes impact parameter b from eccentricity e, excess speed v_inf, and mu:
+   * b = (mu / v_inf²) * sqrt(e² - 1)
+   */
+  static impactParameterFromEccentricity(e: number, vInfMPerS: number, muPlanet: number): number {
+    if (vInfMPerS <= 0 || muPlanet <= 0 || e <= 1.0) return 0;
     const charLen = muPlanet / (vInfMPerS * vInfMPerS);
-    return -charLen + Math.sqrt(charLen * charLen + bM * bM);
+    return charLen * Math.sqrt(e * e - 1.0);
   }
 
   /**
    * Converts periapsis radius r_p to impact parameter b:
-   * b = r_p * sqrt(1 + 2 * mu_p / (r_p * v_inf²))
+   * e = 1 + (r_p * v_inf² / mu)
+   * b = (mu / v_inf²) * sqrt(e² - 1)
+   * (Equivalent to b = r_p * sqrt(1 + 2 * mu / (r_p * v_inf²)))
    */
   static periapsisToImpactParameter(rpM: number, vInfMPerS: number, muPlanet: number): number {
     if (rpM <= 0 || vInfMPerS <= 0 || muPlanet <= 0) return 0;
-    const ratio = (2.0 * muPlanet) / (rpM * vInfMPerS * vInfMPerS);
-    return rpM * Math.sqrt(1.0 + ratio);
+    const e = FlybyEngine.eccentricityFromPeriapsis(rpM, vInfMPerS, muPlanet);
+    return FlybyEngine.impactParameterFromEccentricity(e, vInfMPerS, muPlanet);
+  }
+
+  /**
+   * Converts impact parameter b to periapsis radius r_p for hyperbolic excess speed v_inf:
+   * r_p = - (mu / v_inf²) + sqrt((mu / v_inf²)² + b²)
+   */
+  static impactParameterToPeriapsis(bM: number, vInfMPerS: number, muPlanet: number): number {
+    if (vInfMPerS <= 0 || muPlanet <= 0 || bM <= 0) return 0;
+    const charLen = muPlanet / (vInfMPerS * vInfMPerS);
+    return -charLen + Math.sqrt(charLen * charLen + bM * bM);
   }
 
   /**
@@ -145,17 +198,21 @@ export class FlybyEngine {
 
     // Hyperbolic orbital elements
     const charLen = muP / (vInfSpeedMPerS * vInfSpeedMPerS);
-    const eccentricity = 1.0 + rpM / charLen;
+    const eccentricity = FlybyEngine.eccentricityFromPeriapsis(rpM, vInfSpeedMPerS, muP);
     const semiMajorAxisM = -charLen; // Negative semi-major axis for hyperbola
 
     // Turning angle delta: sin(delta / 2) = 1 / e
-    const halfDelta = Math.asin(Math.min(1.0, 1.0 / eccentricity));
-    const deltaRad = 2.0 * halfDelta;
+    const deltaRad = FlybyEngine.deflectionFromEccentricity(eccentricity);
     const deltaDeg = (deltaRad * 180.0) / Math.PI;
 
-    // Planet velocity in Sun frame (assumed circular orbit along +Y)
-    const VpMag = planet.orbitalSpeedMPerS;
-    const vPlanetSun = new Vector3D(0, VpMag, 0);
+    // Planet velocity in Sun frame:
+    // If custom velocity vector specified, use it; otherwise use circular orbital speed along +Y
+    const vPlanetSun = config.planetVelocityVectorMPerS
+      ? config.planetVelocityVectorMPerS.clone()
+      : planet.customVelocityMPerS
+      ? new Vector3D(planet.customVelocityMPerS.x, planet.customVelocityMPerS.y, planet.customVelocityMPerS.z)
+      : new Vector3D(0, planet.orbitalSpeedMPerS, 0);
+    const VpMag = vPlanetSun.magnitude();
 
     // Incoming asymptote vector v_inf(-)
     // By convention, incoming vector travels predominantly in +X direction
@@ -182,13 +239,13 @@ export class FlybyEngine {
     // Ensure strict numerical conservation of magnitude
     vInfPlus.normalize().scale(vInfSpeedMPerS);
 
-    // Delta-v assist in planet frame
-    const deltaVAssist = new Vector3D(
+    // Delta-v vector in planet frame (and Sun frame, since V_p cancels)
+    const deltaVVector = new Vector3D(
       vInfPlus.x - vInfMinus.x,
       vInfPlus.y - vInfMinus.y,
       vInfPlus.z - vInfMinus.z
     );
-    const deltaVMag = deltaVAssist.magnitude();
+    const deltaVVectorMag = deltaVVector.magnitude();
 
     // Sun-relative velocities
     const vInSun = new Vector3D(
@@ -204,12 +261,21 @@ export class FlybyEngine {
 
     const vInSunSpeed = vInSun.magnitude();
     const vOutSunSpeed = vOutSun.magnitude();
-    const deltaVSunSpeed = vOutSunSpeed - vInSunSpeed;
+    const deltaVSpeed = vOutSunSpeed - vInSunSpeed;
+    const deltaVVectorSun = new Vector3D(
+      vOutSun.x - vInSun.x,
+      vOutSun.y - vInSun.y,
+      vOutSun.z - vInSun.z
+    );
 
-    // Specific and total kinetic energy change in Sun frame
-    // Delta_eps = 0.5 * (v_out² - v_in²) = V_planet . Delta_v
-    const deltaKineticEnergyJPerKg = 0.5 * (vOutSunSpeed * vOutSunSpeed - vInSunSpeed * vInSunSpeed);
-    const deltaTotalKineticEnergyJ = spacecraftMassKg * deltaKineticEnergyJPerKg;
+    // Specific and total kinetic energy change in Sun frame:
+    // Delta_eps = 0.5 * (|v_out|² - |v_in|²)
+    const deltaSpecificEnergyJPerKg = 0.5 * (vOutSunSpeed * vOutSunSpeed - vInSunSpeed * vInSunSpeed);
+    const deltaKineticEnergyJ = spacecraftMassKg * deltaSpecificEnergyJPerKg;
+
+    // Work done by moving gravitational field: V_planet · Δv
+    const vPlanetDotDeltaVMPerS2 = vPlanetSun.dot(deltaVVector);
+    const energyIdentityDiffJPerKg = Math.abs(deltaSpecificEnergyJPerKg - vPlanetDotDeltaVMPerS2);
 
     return {
       vInfMPerS: vInfSpeedMPerS,
@@ -222,16 +288,24 @@ export class FlybyEngine {
       deflectionAngleDeg: deltaDeg,
       vInfMinusMPerS: vInfMinus,
       vInfPlusMPerS: vInfPlus,
-      deltaVAssistMPerS: deltaVAssist,
-      deltaVAssistMagnitudeMPerS: deltaVMag,
+      deltaVVectorMPerS: deltaVVector,
+      deltaVVectorMagnitudeMPerS: deltaVVectorMag,
+      deltaVAssistMPerS: deltaVVector, // Backward-compatible alias
+      deltaVAssistMagnitudeMPerS: deltaVVectorMag, // Backward-compatible alias
       vInSunMPerS: vInSun,
       vOutSunMPerS: vOutSun,
       vInSunSpeedMPerS: vInSunSpeed,
       vOutSunSpeedMPerS: vOutSunSpeed,
-      deltaVSunSpeedMPerS: deltaVSunSpeed,
-      deltaKineticEnergyJPerKg,
-      deltaTotalKineticEnergyJ,
-      isAcceleration: deltaVSunSpeed > 0,
+      deltaVVectorSunMPerS: deltaVVectorSun,
+      deltaVSpeedMPerS: deltaVSpeed,
+      deltaVSunSpeedMPerS: deltaVSpeed, // Backward-compatible alias
+      deltaSpecificEnergyJPerKg,
+      deltaKineticEnergyJ,
+      vPlanetDotDeltaVMPerS2,
+      energyIdentityDiffJPerKg,
+      deltaKineticEnergyJPerKg: deltaSpecificEnergyJPerKg, // Backward-compatible alias
+      deltaTotalKineticEnergyJ: deltaKineticEnergyJ, // Backward-compatible alias
+      isAcceleration: deltaVSpeed > 0,
       isPhysicalCollision,
     };
   }
@@ -246,6 +320,8 @@ export class FlybyEngine {
       maxPoints?: number;
       entryDistanceMultiple?: number;
       timeStepCoeff?: number;
+      simulationDurationS?: number;
+      trajectoryMode?: 'NUMERICAL_RK4' | 'ANALYTICAL_IDEAL';
     }
   ): FlybySimulationResult {
     const analytical = FlybyEngine.computeAnalytical(config);
@@ -294,21 +370,50 @@ export class FlybyEngine {
     const sinPsi = Math.sin(rotPsi);
 
     // Rotate into simulation planet-centric frame
-    const pos = new Vector3D(
+    let pos = new Vector3D(
       xw * cosPsi - yw * sinPsi,
       xw * sinPsi + yw * cosPsi,
       0
     );
-    const vel = new Vector3D(
+    let vel = new Vector3D(
       vxw * cosPsi - vyw * sinPsi,
       vxw * sinPsi + vyw * cosPsi,
       0
     );
 
     // Sun frame parameters
+    const vPlanetCustom = config.planetVelocityVectorMPerS
+      ? config.planetVelocityVectorMPerS.clone()
+      : planet.customVelocityMPerS
+      ? new Vector3D(planet.customVelocityMPerS.x, planet.customVelocityMPerS.y, planet.customVelocityMPerS.z)
+      : undefined;
+
     const aPlanet = planet.semiMajorAxisM;
-    const VpMag = planet.orbitalSpeedMPerS;
-    const omegaP = VpMag / aPlanet; // Angular rate around Sun (rad/s)
+    const VpMag = vPlanetCustom ? vPlanetCustom.magnitude() : planet.orbitalSpeedMPerS;
+    const omegaP = aPlanet > 0 ? VpMag / aPlanet : 0; // Angular rate around Sun (rad/s)
+    const initialPhaseRad = ((config.planetInitialPhaseDeg || 0) * Math.PI) / 180.0;
+
+    const getPlanetSunState = (t: number) => {
+      if (vPlanetCustom) {
+        return {
+          pos: new Vector3D(vPlanetCustom.x * t, vPlanetCustom.y * t, vPlanetCustom.z * t),
+          vel: vPlanetCustom.clone(),
+        };
+      }
+      const planetAngle = initialPhaseRad + omegaP * t;
+      return {
+        pos: new Vector3D(
+          aPlanet * Math.cos(planetAngle),
+          aPlanet * Math.sin(planetAngle),
+          0
+        ),
+        vel: new Vector3D(
+          -VpMag * Math.sin(planetAngle),
+          VpMag * Math.cos(planetAngle),
+          0
+        ),
+      };
+    };
 
     // Store trajectory samples
     const trajectory: TrajectoryPoint[] = [];
@@ -332,6 +437,10 @@ export class FlybyEngine {
 
     // Total expected flyby time scale ~ 2 * rStart / vInf
     const timeScaleApprox = (2.5 * rStart) / vInfSpeedMPerS;
+    const maxSimTime =
+      options?.simulationDurationS && options.simulationDurationS > 0
+        ? options.simulationDurationS
+        : timeScaleApprox * 3;
     // Step coefficient: smaller near periapsis
     const eta = options?.timeStepCoeff ?? 0.015;
 
@@ -351,17 +460,9 @@ export class FlybyEngine {
       const epsPlanet = 0.5 * spdPlanet * spdPlanet - muP / dist;
 
       // Heliocentric planet state at time t
-      const planetAngle = omegaP * t;
-      const planetPosSun = new Vector3D(
-        aPlanet * Math.cos(planetAngle),
-        aPlanet * Math.sin(planetAngle),
-        0
-      );
-      const planetVelSun = new Vector3D(
-        -VpMag * Math.sin(planetAngle),
-        VpMag * Math.cos(planetAngle),
-        0
-      );
+      const planetSunState = getPlanetSunState(t);
+      const planetPosSun = planetSunState.pos;
+      const planetVelSun = planetSunState.vel;
 
       // Spacecraft state in Sun frame
       const posSun = new Vector3D(
@@ -378,6 +479,7 @@ export class FlybyEngine {
       const rSun = posSun.magnitude();
       const epsSun = 0.5 * spdSun * spdSun - MU_SUN / rSun;
       const kinEnergy = 0.5 * spacecraftMassKg * spdSun * spdSun;
+      const gravAccel = dist > 0 ? muP / (dist * dist) : 0;
 
       trajectory.push({
         timeS: t,
@@ -387,6 +489,7 @@ export class FlybyEngine {
         distanceFromCenterM: dist,
         altitudeM: alt,
         specificEnergyPlanetJPerKg: epsPlanet,
+        gravitationalAccelerationMPerS2: gravAccel,
         posSunM: posSun,
         velSunMPerS: velSun,
         speedSunMPerS: spdSun,
@@ -418,19 +521,19 @@ export class FlybyEngine {
     let stepCount = 0;
     const maxSteps = 100000;
 
-    while (stepCount < maxSteps && !hasRecededPastStart && timeS < timeScaleApprox * 3) {
+    while (stepCount < maxSteps && !hasRecededPastStart && timeS < maxSimTime) {
       stepCount++;
       const r = pos.magnitude();
 
-      // Check for physical surface impact
+      // Check if already at or inside physical surface
       if (r <= Rp) {
         collisionDetected = true;
         collisionTimeS = timeS;
-        collisionPosition = pos.clone();
+        collisionPosition = pos.clone().normalize().scale(Rp);
         break;
       }
 
-      // Check if spacecraft has departed past the starting distance after passing periapsis
+      // Check if spacecraft has departed past starting distance after passing periapsis
       const rDot = (pos.x * vel.x + pos.y * vel.y + pos.z * vel.z) / r;
       if (rDot > 0 && r >= rStart) {
         hasRecededPastStart = true;
@@ -442,6 +545,11 @@ export class FlybyEngine {
       const dtMin = 0.05; // 50 ms minimum step
       const dtMax = Math.max(1.0, (0.01 * rStart) / vInfSpeedMPerS);
       const dt = Math.max(dtMin, Math.min(dtMax, (eta * r) / Math.max(vMag, 1.0)));
+
+      // Save previous step state for sub-step refinement and continuous collision detection
+      const prevPos = pos.clone();
+      const prevVel = vel.clone();
+      const prevTimeS = timeS;
 
       // 4th-Order Runge-Kutta step
       // k1
@@ -487,57 +595,144 @@ export class FlybyEngine {
       );
       const a4 = getAccel(pos4);
 
-      // Update state
-      pos.x += (dt / 6.0) * (v1.x + 2.0 * vel2.x + 2.0 * vel3.x + vel4.x);
-      pos.y += (dt / 6.0) * (v1.y + 2.0 * vel2.y + 2.0 * vel3.y + vel4.y);
-      pos.z += (dt / 6.0) * (v1.z + 2.0 * vel2.z + 2.0 * vel3.z + vel4.z);
+      // Proposed next state
+      const nextPos = new Vector3D(
+        pos.x + (dt / 6.0) * (v1.x + 2.0 * vel2.x + 2.0 * vel3.x + vel4.x),
+        pos.y + (dt / 6.0) * (v1.y + 2.0 * vel2.y + 2.0 * vel3.y + vel4.y),
+        pos.z + (dt / 6.0) * (v1.z + 2.0 * vel2.z + 2.0 * vel3.z + vel4.z)
+      );
+      const nextVel = new Vector3D(
+        vel.x + (dt / 6.0) * (a1.x + 2.0 * a2.x + 2.0 * a3.x + a4.x),
+        vel.y + (dt / 6.0) * (a1.y + 2.0 * a2.y + 2.0 * a3.y + a4.y),
+        vel.z + (dt / 6.0) * (a1.z + 2.0 * a2.z + 2.0 * a3.z + a4.z)
+      );
 
-      vel.x += (dt / 6.0) * (a1.x + 2.0 * a2.x + 2.0 * a3.x + a4.x);
-      vel.y += (dt / 6.0) * (a1.y + 2.0 * a2.y + 2.0 * a3.y + a4.y);
-      vel.z += (dt / 6.0) * (a1.z + 2.0 * a2.z + 2.0 * a3.z + a4.z);
+      const nextDist = nextPos.magnitude();
 
-      timeS += dt;
+      // Continuous sub-step collision detection:
+      // Parameterize segment r(tau) = prevPos + tau * deltaR, tau in [0, 1]
+      // Solve |r(tau)|² = Rp² => A*tau² + B*tau + C = 0
+      const deltaR = new Vector3D(nextPos.x - prevPos.x, nextPos.y - prevPos.y, nextPos.z - prevPos.z);
+      const deltaA = deltaR.x * deltaR.x + deltaR.y * deltaR.y + deltaR.z * deltaR.z;
+      const deltaB = 2.0 * (prevPos.x * deltaR.x + prevPos.y * deltaR.y + prevPos.z * deltaR.z);
+      const deltaC = prevPos.x * prevPos.x + prevPos.y * prevPos.y + prevPos.z * prevPos.z - Rp * Rp;
 
-      // Track closest approach continuously on every numerical step
-      const currentDist = pos.magnitude();
-      if (currentDist < minDistance) {
-        minDistance = currentDist;
-        const currentPlanetAngle = omegaP * timeS;
-        const currentPlanetPosSun = new Vector3D(
-          aPlanet * Math.cos(currentPlanetAngle),
-          aPlanet * Math.sin(currentPlanetAngle),
-          0
+      let subStepCollision = false;
+      let tauCol = 1.0;
+
+      if (nextDist <= Rp || deltaC <= 0) {
+        subStepCollision = true;
+        const discr = deltaB * deltaB - 4.0 * deltaA * deltaC;
+        if (discr >= 0 && deltaA > 1e-12) {
+          const root1 = (-deltaB - Math.sqrt(discr)) / (2.0 * deltaA);
+          tauCol = Math.max(0.0, Math.min(1.0, root1));
+        } else {
+          tauCol = 0.5;
+        }
+      }
+
+      if (subStepCollision) {
+        collisionDetected = true;
+        collisionTimeS = prevTimeS + tauCol * dt;
+        const colPos = new Vector3D(
+          prevPos.x + tauCol * deltaR.x,
+          prevPos.y + tauCol * deltaR.y,
+          prevPos.z + tauCol * deltaR.z
         );
-        const currentPlanetVelSun = new Vector3D(
-          -VpMag * Math.sin(currentPlanetAngle),
-          VpMag * Math.cos(currentPlanetAngle),
-          0
+        // Project onto physical surface radius with zero tolerance
+        collisionPosition = colPos.normalize().scale(Rp);
+        const colVel = new Vector3D(
+          prevVel.x + tauCol * (nextVel.x - prevVel.x),
+          prevVel.y + tauCol * (nextVel.y - prevVel.y),
+          prevVel.z + tauCol * (nextVel.z - prevVel.z)
         );
+
+        pos = collisionPosition.clone();
+        vel = colVel;
+        timeS = collisionTimeS;
+
+        recordPoint(timeS, pos, vel);
+        break;
+      }
+
+      // Continuous sub-step closest-approach refinement:
+      // At periapsis, radial velocity r · v = 0.
+      // If dotPrev <= 0 and dotNext > 0, periapsis occurred inside this step.
+      const dotPrev = prevPos.x * prevVel.x + prevPos.y * prevVel.y + prevPos.z * prevVel.z;
+      const dotNext = nextPos.x * nextVel.x + nextPos.y * nextVel.y + nextPos.z * nextVel.z;
+
+      if (dotPrev <= 0 && dotNext > 0) {
+        const denom = dotNext - dotPrev;
+        const tauPeri = denom !== 0 ? Math.max(0.0, Math.min(1.0, -dotPrev / denom)) : 0.5;
+        const periPos = new Vector3D(
+          prevPos.x + tauPeri * deltaR.x,
+          prevPos.y + tauPeri * deltaR.y,
+          prevPos.z + tauPeri * deltaR.z
+        );
+        const periVel = new Vector3D(
+          prevVel.x + tauPeri * (nextVel.x - prevVel.x),
+          prevVel.y + tauPeri * (nextVel.y - prevVel.y),
+          prevVel.z + tauPeri * (nextVel.z - prevVel.z)
+        );
+        const periDist = periPos.magnitude();
+
+        if (periDist < minDistance) {
+          minDistance = periDist;
+          const periTime = prevTimeS + tauPeri * dt;
+          const periSunState = getPlanetSunState(periTime);
+          const periPosSun = new Vector3D(
+            periSunState.pos.x + periPos.x,
+            periSunState.pos.y + periPos.y,
+            periSunState.pos.z + periPos.z
+          );
+          const periVelSun = new Vector3D(
+            periSunState.vel.x + periVel.x,
+            periSunState.vel.y + periVel.y,
+            periSunState.vel.z + periVel.z
+          );
+
+          closestApproach = {
+            timeS: periTime,
+            distanceM: periDist,
+            altitudeM: periDist - Rp,
+            speedPlanetMPerS: periVel.magnitude(),
+            speedSunMPerS: periVelSun.magnitude(),
+            positionPlanetM: periPos.clone(),
+            positionSunM: periPosSun,
+          };
+        }
+      } else if (nextDist < minDistance) {
+        minDistance = nextDist;
+        const nextTime = prevTimeS + dt;
+        const nextSunState = getPlanetSunState(nextTime);
         const currentPosSun = new Vector3D(
-          currentPlanetPosSun.x + pos.x,
-          currentPlanetPosSun.y + pos.y,
-          currentPlanetPosSun.z + pos.z
+          nextSunState.pos.x + nextPos.x,
+          nextSunState.pos.y + nextPos.y,
+          nextSunState.pos.z + nextPos.z
         );
         const currentVelSun = new Vector3D(
-          currentPlanetVelSun.x + vel.x,
-          currentPlanetVelSun.y + vel.y,
-          currentPlanetVelSun.z + vel.z
+          nextSunState.vel.x + nextVel.x,
+          nextSunState.vel.y + nextVel.y,
+          nextSunState.vel.z + nextVel.z
         );
         closestApproach = {
-          timeS,
-          distanceM: currentDist,
-          altitudeM: currentDist - Rp,
-          speedPlanetMPerS: vel.magnitude(),
+          timeS: nextTime,
+          distanceM: nextDist,
+          altitudeM: nextDist - Rp,
+          speedPlanetMPerS: nextVel.magnitude(),
           speedSunMPerS: currentVelSun.magnitude(),
-          positionPlanetM: pos.clone(),
+          positionPlanetM: nextPos.clone(),
           positionSunM: currentPosSun,
         };
       }
 
-      // Sample trajectory periodically
-      if (stepCount % Math.max(1, Math.floor(maxSteps / maxPoints)) === 0) {
-        recordPoint(timeS, pos, vel);
-      }
+      // Update state for next step
+      pos = nextPos;
+      vel = nextVel;
+      timeS += dt;
+
+      // Sample trajectory at high temporal fidelity
+      recordPoint(timeS, pos, vel);
     }
 
     // Always record final point

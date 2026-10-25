@@ -45,25 +45,32 @@ export class EarthVisuals {
     const sunLight = new THREE.DirectionalLight(0xffffff, 2.8);
     sunLight.position.copy(sunDirection.clone().multiplyScalar(150));
 
-    // 2. Load Textures with Local Fallbacks
-    const textureLoader = new THREE.TextureLoader();
+    // 2. Load Textures with Local Fallbacks (safe for both browser and headless Node)
+    const isBrowser = typeof document !== 'undefined';
+    const textureLoader = isBrowser ? new THREE.TextureLoader() : null;
     
     // Day Surface Texture (2K Solar System Scope / NASA Blue Marble)
-    const dayTexture = textureLoader.load('/textures/earth_day_2k.jpg', undefined, undefined, () => {
-      console.warn('Using procedural day texture fallback');
-    });
+    const dayTexture = isBrowser
+      ? textureLoader!.load('/textures/earth_day_2k.jpg', undefined, undefined, () => {
+          console.warn('Using procedural day texture fallback');
+        })
+      : new THREE.Texture();
     dayTexture.colorSpace = THREE.SRGBColorSpace;
 
     // Night Surface Texture (2K City Lights)
-    const nightTexture = textureLoader.load('/textures/earth_night_2k.jpg', undefined, undefined, () => {
-      console.warn('Using procedural night texture fallback');
-    });
+    const nightTexture = isBrowser
+      ? textureLoader!.load('/textures/earth_night_2k.jpg', undefined, undefined, () => {
+          console.warn('Using procedural night texture fallback');
+        })
+      : new THREE.Texture();
     nightTexture.colorSpace = THREE.SRGBColorSpace;
 
     // Cloud Layer Texture (2K NASA Cloud Composite)
-    const cloudsTexture = textureLoader.load('/textures/earth_clouds_2k.jpg', undefined, undefined, () => {
-      console.warn('Using procedural cloud texture fallback');
-    });
+    const cloudsTexture = isBrowser
+      ? textureLoader!.load('/textures/earth_clouds_2k.jpg', undefined, undefined, () => {
+          console.warn('Using procedural cloud texture fallback');
+        })
+      : new THREE.Texture();
 
     // 3. Custom Day / Night Terminator Earth Shader Material
     const earthUniforms = {

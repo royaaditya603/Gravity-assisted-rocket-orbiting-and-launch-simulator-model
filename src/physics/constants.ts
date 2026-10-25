@@ -7,6 +7,9 @@
  * All orbital altitudes h are measured relative to this reference radius: r = R_E + h.
  */
 
+// Fundamental Physical Constants (CODATA 2018)
+export const G_NEWTON = 6.6743e-11; // m^3 / (kg * s^2) (Universal Gravitational Constant)
+
 // Earth Gravitational Parameters
 export const MU_EARTH = 3.986004418e14; // m^3 / s^2 (Standard gravitational parameter GM)
 export const R_EARTH = 6371000.0; // m (Mean volumetric spherical radius: 6,371.0 km)
@@ -42,6 +45,8 @@ export interface PlanetaryBodyData {
   description: string;
   ringInnerRadiusM?: number;
   ringOuterRadiusM?: number;
+  isTheoretical?: boolean;
+  customVelocityMPerS?: { x: number; y: number; z: number };
 }
 
 export const PLANETARY_BODIES: Record<string, PlanetaryBodyData> = {
@@ -90,6 +95,41 @@ export const PLANETARY_BODIES: Record<string, PlanetaryBodyData> = {
     massKg: 4.8675e24,
     color: '#e6a15c',
     description: 'Dense terrestrial planet used for inner-solar system gravity braking and outbound slingshots.',
+  },
+  MERCURY: {
+    id: 'MERCURY',
+    name: 'Mercury',
+    mu: 2.2032e13, // m^3 / s^2 (GM_M)
+    radiusM: 2439700.0, // 2,439.7 km
+    semiMajorAxisM: 57909050000.0, // 0.387 AU
+    orbitalSpeedMPerS: Math.sqrt(1.32712440018e20 / 57909050000.0), // ~47,872 m/s
+    massKg: 3.3011e23,
+    color: '#9e9e9e',
+    description: 'Innermost terrestrial planet. High orbital velocity requires massive gravity-braking assist to reach.',
+  },
+  URANUS: {
+    id: 'URANUS',
+    name: 'Uranus',
+    mu: 5.793939e15, // m^3 / s^2 (GM_U)
+    radiusM: 25362000.0, // 25,362 km
+    semiMajorAxisM: 2870972000000.0, // 19.191 AU
+    orbitalSpeedMPerS: Math.sqrt(1.32712440018e20 / 2870972000000.0), // ~6,799 m/s
+    massKg: 8.681e25,
+    color: '#70d6ff',
+    description: 'Ice giant visited by Voyager 2 in January 1986. Gravity assist accelerated probe toward Neptune.',
+    ringInnerRadiusM: 38000000.0,
+    ringOuterRadiusM: 51149000.0,
+  },
+  NEPTUNE: {
+    id: 'NEPTUNE',
+    name: 'Neptune',
+    mu: 6.836529e15, // m^3 / s^2 (GM_N)
+    radiusM: 24622000.0, // 24,622 km
+    semiMajorAxisM: 4498253000000.0, // 30.069 AU
+    orbitalSpeedMPerS: Math.sqrt(1.32712440018e20 / 4498253000000.0), // ~5,431 m/s
+    massKg: 1.02413e26,
+    color: '#3a86ff',
+    description: 'Outermost ice giant. Voyager 2 flew over its north pole in August 1989 for a southward escape.',
   },
 };
 

@@ -56,4 +56,35 @@ describe('Patched-Conic Planetary Gravity Assist Mechanics', () => {
     expect(result.deltaSpecificEnergyJPerKg).toBeLessThan(0.0);
     expect(result.vOutCentralSpeedMPerS).toBeLessThan(result.vInCentralSpeedMPerS);
   });
+
+  it('rigorously verifies fundamental energy identity: Delta_eps = V_planet · Delta_v_vector', () => {
+    const vInCentral = new Vector3D(1600.0, 450.0, 100.0);
+    const resultTrailing = GravityAssist.computeFlyby(vInCentral, vPlanet, rPeriapsis, muPlanet, 'TRAILING');
+    const resultLeading = GravityAssist.computeFlyby(vInCentral, vPlanet, rPeriapsis, muPlanet, 'LEADING');
+
+    // In both passes, Delta_eps = 0.5 * (v_out^2 - v_in^2) must identically match V_planet · Delta_v
+    expect(resultTrailing.energyIdentityDiffJPerKg).toBeLessThan(1e-9);
+    expect(resultTrailing.deltaSpecificEnergyJPerKg).toBeCloseTo(resultTrailing.vPlanetDotDeltaVMPerS2, 8);
+
+    expect(resultLeading.energyIdentityDiffJPerKg).toBeLessThan(1e-9);
+    expect(resultLeading.deltaSpecificEnergyJPerKg).toBeCloseTo(resultLeading.vPlanetDotDeltaVMPerS2, 8);
+  });
+
+  it('proves that scalar speed change and vector velocity change magnitude are distinct quantities', () => {
+    const vInCentral = new Vector3D(1400.0, 600.0, 0);
+    const result = GravityAssist.computeFlyby(vInCentral, vPlanet, rPeriapsis, muPlanet, 'TRAILING');
+
+    const vectorDeltaVMag = result.deltaVVectorMagnitudeMPerS;
+    const scalarSpeedChange = result.deltaVSpeedMPerS;
+
+    // Vector change magnitude is strictly positive: ||v_out - v_in|| > 0
+    expect(vectorDeltaVMag).toBeGreaterThan(0);
+
+    // Scalar speed change: ||v_out|| - ||v_in||
+    expect(scalarSpeedChange).toBeGreaterThan(0);
+
+    // In general 2D/3D geometry, ||v_out - v_in|| is NOT equal to ||v_out|| - ||v_in|| (triangle inequality)
+    expect(Math.abs(vectorDeltaVMag - scalarSpeedChange)).toBeGreaterThan(10.0); // Differs by at least 10 m/s
+    expect(vectorDeltaVMag).toBeGreaterThan(scalarSpeedChange);
+  });
 });

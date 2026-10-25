@@ -1,18 +1,42 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as THREE from 'three';
-import { FlybySimulationResult, ReferenceFrame, TrajectoryPoint } from '../../../physics/FlybyEngine';
-import { PlanetaryTextures } from '../textures/PlanetaryTextures';
+import { FlybySimulationResult, ReferenceFrame } from '../../../physics/FlybyEngine';
+import { PlanetaryVisuals, PlanetBundle } from './PlanetaryVisuals';
+import { SpacecraftVisuals, SpacecraftBundle, SpacecraftAttitudeMode } from './SpacecraftVisuals';
+import { TrajectoryInterpolator, InterpolatedState } from './TrajectoryInterpolator';
+import {
+  RotateCcw,
+  Compass,
+  Grid,
+  Zap,
+  Target,
+  Maximize2,
+  Eye,
+  Layers,
+  ArrowRight,
+  Sliders,
+  Settings,
+  Sparkles,
+} from 'lucide-react';
 
 export type FlybyCameraMode = 'OVERVIEW' | 'CLOSE_UP' | 'PROBE_FOLLOW' | 'FREE';
+export type GraphicsQuality = 'HIGH' | 'BALANCED' | 'PERFORMANCE';
 
-interface Flyby3DCanvasProps {
+export interface Flyby3DCanvasProps {
   simResult: FlybySimulationResult | null;
   currentPlaybackIndex: number;
   referenceFrame: ReferenceFrame;
   cameraMode: FlybyCameraMode;
   showVectors: boolean;
   showTrajectoryTrail: boolean;
+  isPlaying?: boolean;
+  playbackSpeed?: number;
   onCameraChange?: (mode: FlybyCameraMode) => void;
+  onReferenceFrameChange?: (frame: ReferenceFrame) => void;
+  onPlaybackIndexChange?: (index: number) => void;
+  showGravitationalAccel?: boolean;
+  showGrid?: boolean;
+  showPeriapsisMarker?: boolean;
 }
 
 export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
@@ -22,6 +46,14 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
   cameraMode,
   showVectors,
   showTrajectoryTrail,
+  isPlaying = false,
+  playbackSpeed = 1.0,
+  onCameraChange,
+  onReferenceFrameChange,
+  onPlaybackIndexChange,
+  showGravitationalAccel: initialShowGravity = true,
+  showGrid: initialShowGrid = true,
+  showPeriapsisMarker: initialShowPeriMarker = true,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -29,65 +61,121 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const animFrameIdRef = useRef<number>(0);
 
-  // Scene references for updates
-  const planetGroupRef = useRef<THREE.Group | null>(null);
-  const probeMeshRef = useRef<THREE.Group | null>(null);
-  const trajectoryLineRef = useRef<THREE.Line | null>(null);
-  const closestMarkerRef = useRef<THREE.Mesh | null>(null);
-  const vectorsGroupRef = useRef<THREE.Group | null>(null);
-  const collisionSphereRef = useRef<THREE.Mesh | null>(null);
+  // Graphics Quality & Attitude Mode
+  const [quality, setQuality] = useState<GraphicsQuality>('HIGH');
+  const [attitudeMode, setAttitudeMode] = useState<SpacecraftAttitudeMode>('VELOCITY_ALIGNED');
+  const [showSettingsDropdown, setShowSettingsDropdown] = useState<boolean>(false);
 
-  // Mouse orbit state
-  const isMouseDownRef = useRef(false);
-  const mousePosRef = useRef({ x: 0, y: 0 });
-  const cameraSphericalRef = useRef({ radius: 35, theta: Math.PI / 4, phi: Math.PI / 3 });
-  const targetLookAtRef = useRef(new THREE.Vector3(0, 0, 0));
+  // Visual toggles
+  const [showGravityVector, setShowGravityVector] = useState<boolean>(initialShowGravity);
+  const [showEquatorialGrid, setShowEquatorialGrid] = useState<boolean>(initialShowGrid);
+  const [showPeriMarker, setShowPeriMarker] = useState<boolean>(initialShowPeriMarker);
 
-  // Normalized visual scale: Planet visual radius = 4.0 units in 3D world
+  // High-Precision Hermite Interpolator
+  const interpolatorRef = useRef<TrajectoryInterpolator | null>(null);
+  useEffect(() => {
+    if (simResult && simResult.trajectory.length > 0) {
+      interpolatorRef.current = new TrajectoryInterpolator(simResult);
+    } else {
+      interpolatorRef.current = null;
+    }
+  }, [simResult]);
+
+  // Visual Scale: Planet radius = 4.0 scene units
   const VISUAL_PLANET_RADIUS = 4.0;
 
+  // Scene entities references
+  const planetBundleRef = useRef<PlanetBundle | null>(null);
+  const spacecraftBundleRef = useRef<SpacecraftBundle | null>(null);
+  const trajectoryLineRef = useRef<THREE.Line | null>(null);
+  const closestMarkerRef = useRef<THREE.Mesh | null>(null);
+  const impactLineRef = useRef<THREE.Line | null>(null);
+  const vectorsGroupRef = useRef<THREE.Group | null>(null);
+  const gridHelperRef = useRef<THREE.GridHelper | null>(null);
+  const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
+
+  // Continuous Playback Time in Seconds
+  const currentTimeSRef = useRef<number>(0);
+  const lastSyncTimeRef = useRef<number>(0);
+
+  // Sync internal continuous time when currentPlaybackIndex is changed from outside (seeking/reset)
+  useEffect(() => {
+    if (simResult && simResult.trajectory.length > 0) {
+      const idx = Math.min(currentPlaybackIndex, simResult.trajectory.length - 1);
+      const targetTimeS = simResult.trajectory[idx].timeS;
+      // Only update if difference is meaningful to prevent jitter during continuous playback
+      if (Math.abs(currentTimeSRef.current - targetTimeS) > 0.2) {
+        currentTimeSRef.current = targetTimeS;
+      }
+    }
+  }, [currentPlaybackIndex, simResult]);
+
+  // Smooth Camera State
+  const isMouseDownRef = useRef(false);
+  const mousePosRef = useRef({ x: 0, y: 0 });
+  const cameraSphericalRef = useRef({ radius: 38, theta: Math.PI / 4, phi: Math.PI / 3 });
+  const currentLookAtRef = useRef(new THREE.Vector3(0, 0, 0));
+  const targetLookAtRef = useRef(new THREE.Vector3(0, 0, 0));
+
+  // Reset camera
+  const handleResetCamera = useCallback(() => {
+    cameraSphericalRef.current = { radius: 38, theta: Math.PI / 4, phi: Math.PI / 3 };
+    targetLookAtRef.current.set(0, 0, 0);
+    if (onCameraChange) onCameraChange('OVERVIEW');
+  }, [onCameraChange]);
+
+  // --- 1. SETUP THREE.JS SCENE & RENDERER ---
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    // 1. Scene & Renderer setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x05060a);
+    scene.background = new THREE.Color(0x030408);
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(
       45,
-      container.clientWidth / container.clientHeight,
+      container.clientWidth / Math.max(container.clientHeight, 1),
       0.1,
-      2000
+      2500
     );
-    camera.position.set(25, 20, 25);
+    camera.position.set(28, 22, 28);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: quality !== 'PERFORMANCE',
+      alpha: false,
+      powerPreference: 'high-performance',
+    });
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    const dprLimit = quality === 'HIGH' ? 2.0 : quality === 'BALANCED' ? 1.5 : 1.0;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, dprLimit));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
+    renderer.toneMappingExposure = 1.25;
+
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // 2. Lighting
-    const sunLight = new THREE.DirectionalLight(0xfffaed, 2.5);
-    sunLight.position.set(60, 25, 40);
+    // Direct Sun Lighting (Directional Light with deep celestial amber warmth)
+    const sunLightDirection = new THREE.Vector3(1.2, 0.45, 0.85).normalize();
+    const sunLight = new THREE.DirectionalLight(0xfffaec, 2.7);
+    sunLight.position.copy(sunLightDirection.clone().multiplyScalar(150));
     scene.add(sunLight);
+    sunLightRef.current = sunLight;
 
-    const ambientLight = new THREE.AmbientLight(0x222838, 1.0);
+    // Ambient Starlight Fill
+    const ambientLight = new THREE.AmbientLight(0x182032, 0.75);
     scene.add(ambientLight);
 
-    // Deep space celestial starfield
-    const starCount = 1500;
+    // Deep Celestial Starfield Skybox
+    const starCount = quality === 'HIGH' ? 1800 : quality === 'BALANCED' ? 1100 : 600;
     const starGeo = new THREE.BufferGeometry();
     const starPos = new Float32Array(starCount * 3);
     for (let i = 0; i < starCount * 3; i += 3) {
-      const r = 500 + Math.random() * 400;
+      const r = 600 + Math.random() * 500;
       const th = Math.random() * Math.PI * 2;
       const ph = Math.acos(2 * Math.random() - 1);
       starPos[i] = r * Math.sin(ph) * Math.cos(th);
@@ -95,51 +183,26 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
       starPos[i + 2] = r * Math.cos(ph);
     }
     starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-    const starMat = new THREE.PointsMaterial({ color: 0x8899bb, size: 1.5, sizeAttenuation: false });
+    const starMat = new THREE.PointsMaterial({
+      color: 0x99aacc,
+      size: 1.5,
+      sizeAttenuation: false,
+    });
     scene.add(new THREE.Points(starGeo, starMat));
 
-    // Reference equatorial orbital grid plane
-    const grid = new THREE.GridHelper(80, 40, 0x2a3348, 0x141824);
+    // Reference Equatorial Orbital Plane Grid
+    const grid = new THREE.GridHelper(80, 40, 0x263045, 0x121622);
     grid.position.y = 0;
     scene.add(grid);
+    gridHelperRef.current = grid;
 
-    // 3. Planetary Body Group
-    const planetGroup = new THREE.Group();
-    scene.add(planetGroup);
-    planetGroupRef.current = planetGroup;
-
-    // 4. Spacecraft Probe Mesh
-    const probeGroup = new THREE.Group();
-    // Probe central bus (gold foil)
-    const busGeo = new THREE.BoxGeometry(0.5, 0.4, 0.4);
-    const busMat = new THREE.MeshStandardMaterial({ color: 0xdfab34, roughness: 0.3, metalness: 0.85 });
-    const busMesh = new THREE.Mesh(busGeo, busMat);
-    probeGroup.add(busMesh);
-
-    // High-gain parabolic antenna dish
-    const dishGeo = new THREE.ConeGeometry(0.35, 0.15, 24, 1, true);
-    const dishMat = new THREE.MeshStandardMaterial({ color: 0xededed, roughness: 0.4, metalness: 0.2, side: THREE.DoubleSide });
-    const dishMesh = new THREE.Mesh(dishGeo, dishMat);
-    dishMesh.rotation.x = Math.PI;
-    dishMesh.position.set(0, 0.3, 0);
-    probeGroup.add(dishMesh);
-
-    // Solar panels / RTG booms
-    const panelGeo = new THREE.BoxGeometry(1.4, 0.03, 0.3);
-    const panelMat = new THREE.MeshStandardMaterial({ color: 0x1c3560, roughness: 0.2, metalness: 0.9 });
-    const panelMesh = new THREE.Mesh(panelGeo, panelMat);
-    probeGroup.add(panelMesh);
-
-    scene.add(probeGroup);
-    probeMeshRef.current = probeGroup;
-
-    // 5. Vectors Group
+    // Vectors Group
     const vectorsGroup = new THREE.Group();
     scene.add(vectorsGroup);
     vectorsGroupRef.current = vectorsGroup;
 
-    // 6. Closest approach marker
-    const markerGeo = new THREE.TorusGeometry(0.6, 0.05, 16, 32);
+    // Closest Approach Periapsis Marker
+    const markerGeo = new THREE.TorusGeometry(0.65, 0.05, 16, 32);
     const markerMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
     const marker = new THREE.Mesh(markerGeo, markerMat);
     marker.rotation.x = Math.PI / 2;
@@ -147,7 +210,12 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
     scene.add(marker);
     closestMarkerRef.current = marker;
 
-    // 7. Mouse interaction listeners
+    // High-Fidelity Believable Spacecraft Probe
+    const scBundle = SpacecraftVisuals.create(1.0);
+    scene.add(scBundle.group);
+    spacecraftBundleRef.current = scBundle;
+
+    // Mouse Orbit Listeners
     const onMouseDown = (e: MouseEvent) => {
       isMouseDownRef.current = true;
       mousePosRef.current = { x: e.clientX, y: e.clientY };
@@ -159,10 +227,10 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
       const dy = e.clientY - mousePosRef.current.y;
       mousePosRef.current = { x: e.clientX, y: e.clientY };
 
-      cameraSphericalRef.current.theta -= dx * 0.007;
+      cameraSphericalRef.current.theta -= dx * 0.0065;
       cameraSphericalRef.current.phi = Math.max(
         0.05,
-        Math.min(Math.PI - 0.05, cameraSphericalRef.current.phi - dy * 0.007)
+        Math.min(Math.PI - 0.05, cameraSphericalRef.current.phi - dy * 0.0065)
       );
     };
 
@@ -174,7 +242,7 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
       e.preventDefault();
       cameraSphericalRef.current.radius = Math.max(
         6.0,
-        Math.min(180.0, cameraSphericalRef.current.radius + e.deltaY * 0.04)
+        Math.min(220.0, cameraSphericalRef.current.radius + e.deltaY * 0.035)
       );
     };
 
@@ -183,147 +251,231 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
     window.addEventListener('mouseup', onMouseUp);
     container.addEventListener('wheel', onWheel, { passive: false });
 
-    // 8. Resize handler
-    const onResize = () => {
+    // Responsive ResizeObserver
+    const resizeObserver = new ResizeObserver(() => {
       if (!container || !rendererRef.current || !cameraRef.current) return;
       const w = container.clientWidth;
       const h = container.clientHeight;
+      if (w === 0 || h === 0) return;
       cameraRef.current.aspect = w / h;
       cameraRef.current.updateProjectionMatrix();
       rendererRef.current.setSize(w, h);
-    };
-    window.addEventListener('resize', onResize);
+    });
+    resizeObserver.observe(container);
 
-    // 9. Animation render loop
+    // --- CONTINUOUS JITTER-FREE 60 FPS ANIMATION LOOP ---
     let lastTime = performance.now();
     const animate = (time: number) => {
       animFrameIdRef.current = requestAnimationFrame(animate);
-      const dt = (time - lastTime) * 0.001;
+      const dt = Math.min(0.1, (time - lastTime) * 0.001);
       lastTime = time;
 
-      // Slow planetary axial spin
-      if (planetGroupRef.current) {
-        planetGroupRef.current.rotation.y += dt * 0.04;
+      const interpolator = interpolatorRef.current;
+      const isSunFrame = referenceFrame === 'HELIOCENTRIC';
+      const planetData = simResult?.config.planet;
+      const toSceneScale = planetData ? VISUAL_PLANET_RADIUS / planetData.radiusM : 1e-6;
+
+      // 1. Advance Simulation Clock if playing
+      if (isPlaying && interpolator && simResult) {
+        const totalDuration = interpolator.getTotalDurationS();
+        // Dynamic speed mapping: traverses trajectory smoothly across playback
+        const timeAdvance = (totalDuration / 22.0) * playbackSpeed * dt;
+        currentTimeSRef.current += timeAdvance;
+
+        if (currentTimeSRef.current >= totalDuration) {
+          if (simResult.collisionDetected) {
+            // Stop at collision impact point
+            currentTimeSRef.current = simResult.collisionTimeS ?? totalDuration;
+          } else {
+            // Loop smoothly
+            currentTimeSRef.current = 0;
+          }
+        }
+
+        // Throttled synchronization back to React HUD / charts (~25 Hz)
+        if (time - lastSyncTimeRef.current > 40 && onPlaybackIndexChange) {
+          lastSyncTimeRef.current = time;
+          const progress = Math.max(0, Math.min(1, currentTimeSRef.current / Math.max(1, totalDuration)));
+          const targetIndex = Math.min(
+            simResult.trajectory.length - 1,
+            Math.floor(progress * (simResult.trajectory.length - 1))
+          );
+          onPlaybackIndexChange(targetIndex);
+        }
       }
 
-      // Update camera position based on mode
+      // 2. Continuous Hermite Evaluation
+      let currentPosScene = new THREE.Vector3(0, 0, 0);
+      let currentVelScene = new THREE.Vector3(0, 0, 0);
+
+      if (interpolator && simResult) {
+        const state: InterpolatedState = interpolator.evaluateAtTime(currentTimeSRef.current);
+
+        if (isSunFrame) {
+          const originPlanet = simResult.trajectory[0].planetPosSunM;
+          currentPosScene.set(
+            (state.posSunM.x - originPlanet.x) * toSceneScale,
+            0,
+            (state.posSunM.y - originPlanet.y) * toSceneScale
+          );
+          currentVelScene.set(state.velSunM.x, 0, state.velSunM.y);
+
+          // In Sun frame, planet moves continuously
+          if (planetBundleRef.current) {
+            const pX = (state.planetPosSunM.x - originPlanet.x) * toSceneScale;
+            const pZ = (state.planetPosSunM.y - originPlanet.y) * toSceneScale;
+            planetBundleRef.current.group.position.set(pX, 0, pZ);
+          }
+        } else {
+          currentPosScene.set(state.posPlanetM.x * toSceneScale, 0, state.posPlanetM.y * toSceneScale);
+          currentVelScene.set(state.velPlanetM.x, 0, state.velPlanetM.y);
+
+          if (planetBundleRef.current) {
+            planetBundleRef.current.group.position.set(0, 0, 0);
+          }
+        }
+
+        // Update Spacecraft Probe transforms smoothly with Quaternion SLERP
+        if (spacecraftBundleRef.current) {
+          const sunPos = new THREE.Vector3(100, 40, 80);
+          spacecraftBundleRef.current.update(
+            currentPosScene,
+            currentVelScene,
+            sunPos,
+            attitudeMode,
+            dt
+          );
+        }
+
+        // Update Dynamic Vector Arrows
+        const vecGroup = vectorsGroupRef.current;
+        if (vecGroup) {
+          while (vecGroup.children.length > 0) {
+            vecGroup.remove(vecGroup.children[0]);
+          }
+
+          if (showVectors) {
+            const vScale = 0.0006;
+            // 1. Current Spacecraft Velocity (Emerald)
+            const vLen = currentVelScene.length() * vScale;
+            if (vLen > 0.15) {
+              const vDir = currentVelScene.clone().normalize();
+              const arrow = new THREE.ArrowHelper(
+                vDir,
+                currentPosScene.clone().add(new THREE.Vector3(0, 0.2, 0)),
+                vLen,
+                0x10b981,
+                0.45,
+                0.22
+              );
+              vecGroup.add(arrow);
+            }
+
+            // 2. Gravitational Acceleration (Purple: pointing to planet center)
+            if (showGravityVector) {
+              const planetPos = isSunFrame && planetBundleRef.current
+                ? planetBundleRef.current.group.position
+                : new THREE.Vector3(0, 0, 0);
+
+              const toPlanet = new THREE.Vector3().subVectors(planetPos, currentPosScene);
+              if (toPlanet.length() > 0.1) {
+                const gDir = toPlanet.clone().normalize();
+                const gMag = state.gravitationalAccelerationMPerS2;
+                const gLen = Math.max(0.6, Math.min(4.5, Math.sqrt(gMag) * 0.42));
+                const gArrow = new THREE.ArrowHelper(
+                  gDir,
+                  currentPosScene.clone().add(new THREE.Vector3(0, 0.25, 0)),
+                  gLen,
+                  0xa855f7,
+                  0.42,
+                  0.2
+                );
+                vecGroup.add(gArrow);
+              }
+            }
+          }
+        }
+      }
+
+      // 3. Update Planetary Body Axial Rotation & Multi-layer Shaders
+      if (planetBundleRef.current) {
+        planetBundleRef.current.update(currentTimeSRef.current, dt);
+      }
+
+      // 4. Smooth Critically-Damped Camera Motion
       const cam = cameraRef.current;
       if (cam) {
-        const { radius, theta, phi } = cameraSphericalRef.current;
-        const target = targetLookAtRef.current;
+        if (cameraMode === 'PROBE_FOLLOW') {
+          targetLookAtRef.current.copy(currentPosScene);
+          cameraSphericalRef.current.radius = Math.max(9.0, cameraSphericalRef.current.radius);
+        } else if (cameraMode === 'CLOSE_UP' && simResult) {
+          const ca = simResult.closestApproach;
+          const caX = isSunFrame ? currentPosScene.x : ca.positionPlanetM.x * toSceneScale;
+          const caZ = isSunFrame ? currentPosScene.z : ca.positionPlanetM.y * toSceneScale;
+          targetLookAtRef.current.set(caX, 0, caZ);
+          cameraSphericalRef.current.radius = 13.0;
+        } else if (cameraMode === 'OVERVIEW') {
+          targetLookAtRef.current.set(0, 0, 0);
+          cameraSphericalRef.current.radius = 48.0;
+        }
 
-        cam.position.x = target.x + radius * Math.sin(phi) * Math.sin(theta);
-        cam.position.y = target.y + radius * Math.cos(phi);
-        cam.position.z = target.z + radius * Math.sin(phi) * Math.cos(theta);
+        // Critically damped look-at interpolation (smooth, zero lag)
+        currentLookAtRef.current.lerp(targetLookAtRef.current, Math.min(1.0, dt * 10.0));
+
+        const { radius, theta, phi } = cameraSphericalRef.current;
+        const target = currentLookAtRef.current;
+        const desiredX = target.x + radius * Math.sin(phi) * Math.sin(theta);
+        const desiredY = target.y + radius * Math.cos(phi);
+        const desiredZ = target.z + radius * Math.sin(phi) * Math.cos(theta);
+
+        // Smooth camera position damping
+        cam.position.lerp(new THREE.Vector3(desiredX, desiredY, desiredZ), Math.min(1.0, dt * 8.0));
         cam.lookAt(target);
       }
 
       renderer.render(scene, camera);
     };
+
     animFrameIdRef.current = requestAnimationFrame(animate);
 
     return () => {
       cancelAnimationFrame(animFrameIdRef.current);
+      resizeObserver.disconnect();
       container.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
       container.removeEventListener('wheel', onWheel);
-      window.removeEventListener('resize', onResize);
+      if (spacecraftBundleRef.current) spacecraftBundleRef.current.dispose();
       renderer.dispose();
     };
-  }, []);
+  }, [quality, attitudeMode, referenceFrame, isPlaying, playbackSpeed, showVectors, showGravityVector, cameraMode]);
 
-  // Update Planet Mesh when planet selection changes
+  // Update Grid
+  useEffect(() => {
+    if (gridHelperRef.current) {
+      gridHelperRef.current.visible = showEquatorialGrid;
+    }
+  }, [showEquatorialGrid]);
+
+  // Update Planet Mesh (When planet changes)
   useEffect(() => {
     const scene = sceneRef.current;
-    const planetGroup = planetGroupRef.current;
-    if (!scene || !planetGroup || !simResult) return;
+    if (!scene || !simResult) return;
 
-    // Clear existing planet children
-    while (planetGroup.children.length > 0) {
-      const obj = planetGroup.children[0];
-      planetGroup.remove(obj);
+    if (planetBundleRef.current) {
+      scene.remove(planetBundleRef.current.group);
+      planetBundleRef.current.dispose();
+      planetBundleRef.current = null;
     }
 
     const planetData = simResult.config.planet;
+    const sunDir = sunLightRef.current?.position.clone().normalize() || new THREE.Vector3(1, 0.5, 0.8).normalize();
 
-    // Planet Sphere
-    const sphereGeo = new THREE.SphereGeometry(VISUAL_PLANET_RADIUS, 64, 48);
-    let sphereMat: THREE.Material;
-
-    if (planetData.id === 'JUPITER') {
-      const jupTex = PlanetaryTextures.createJupiterTexture();
-      sphereMat = new THREE.MeshStandardMaterial({
-        map: jupTex,
-        roughness: 0.85,
-        metalness: 0.05,
-      });
-      planetGroup.rotation.z = THREE.MathUtils.degToRad(3.13); // Jupiter axial tilt
-    } else if (planetData.id === 'SATURN') {
-      const satTex = PlanetaryTextures.createSaturnTexture();
-      sphereMat = new THREE.MeshStandardMaterial({
-        map: satTex,
-        roughness: 0.8,
-        metalness: 0.1,
-      });
-
-      // Saturn Ring System
-      // Physical scale: inner radius ~1.28 R_S, outer radius ~2.35 R_S
-      const ringInner = VISUAL_PLANET_RADIUS * 1.28;
-      const ringOuter = VISUAL_PLANET_RADIUS * 2.35;
-      const ringGeo = new THREE.RingGeometry(ringInner, ringOuter, 64);
-      const ringTex = PlanetaryTextures.createSaturnRingTexture();
-
-      // Adjust UV mapping for circular ring geometry
-      const pos = ringGeo.attributes.position;
-      const uv = ringGeo.attributes.uv;
-      for (let i = 0; i < pos.count; i++) {
-        const x = pos.getX(i);
-        const y = pos.getY(i);
-        const dist = Math.sqrt(x * x + y * y);
-        const u = (dist - ringInner) / (ringOuter - ringInner);
-        uv.setXY(i, u, 0.5);
-      }
-      uv.needsUpdate = true;
-
-      const ringMat = new THREE.MeshStandardMaterial({
-        map: ringTex,
-        side: THREE.DoubleSide,
-        transparent: true,
-        roughness: 0.5,
-      });
-
-      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-      ringMesh.rotation.x = Math.PI / 2;
-      planetGroup.add(ringMesh);
-
-      planetGroup.rotation.z = THREE.MathUtils.degToRad(26.73); // Saturn axial tilt
-    } else {
-      sphereMat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(planetData.color),
-        roughness: 0.7,
-      });
-      planetGroup.rotation.z = 0;
-    }
-
-    const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
-    planetGroup.add(sphereMesh);
-
-    // Collision wireframe sphere
-    if (collisionSphereRef.current) {
-      scene.remove(collisionSphereRef.current);
-    }
-    const colWireGeo = new THREE.SphereGeometry(VISUAL_PLANET_RADIUS * 1.01, 32, 24);
-    const colWireMat = new THREE.MeshBasicMaterial({
-      color: 0xef4444,
-      wireframe: true,
-      transparent: true,
-      opacity: simResult.collisionDetected ? 0.6 : 0.15,
-    });
-    const colSphere = new THREE.Mesh(colWireGeo, colWireMat);
-    scene.add(colSphere);
-    collisionSphereRef.current = colSphere;
-  }, [simResult?.config.planet.id, simResult?.collisionDetected]);
+    // Create Photorealistic Multi-layer Planet
+    const bundle = PlanetaryVisuals.create(planetData, VISUAL_PLANET_RADIUS, sunDir);
+    scene.add(bundle.group);
+    planetBundleRef.current = bundle;
+  }, [simResult?.config.planet.id]);
 
   // Update Trajectory Trail line
   useEffect(() => {
@@ -336,22 +488,25 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
       trajectoryLineRef.current = null;
     }
 
+    if (impactLineRef.current) {
+      scene.remove(impactLineRef.current);
+      impactLineRef.current.geometry.dispose();
+      impactLineRef.current = null;
+    }
+
     if (!showTrajectoryTrail) return;
 
     const planetRadiusM = simResult.config.planet.radiusM;
     const toSceneScale = VISUAL_PLANET_RADIUS / planetRadiusM;
-
     const points: THREE.Vector3[] = [];
     const isSunFrame = referenceFrame === 'HELIOCENTRIC';
 
     for (const pt of simResult.trajectory) {
       if (isSunFrame) {
-        // In Sun frame, center origin on the initial planet location
         const relSunX = (pt.posSunM.x - simResult.trajectory[0].planetPosSunM.x) * toSceneScale;
         const relSunY = (pt.posSunM.y - simResult.trajectory[0].planetPosSunM.y) * toSceneScale;
         points.push(new THREE.Vector3(relSunX, 0, relSunY));
       } else {
-        // In Planet-centric frame
         points.push(new THREE.Vector3(pt.posPlanetM.x * toSceneScale, 0, pt.posPlanetM.y * toSceneScale));
       }
     }
@@ -363,164 +518,202 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
     scene.add(line);
     trajectoryLineRef.current = line;
 
-    // Position closest-approach marker
+    // Position periapsis marker
     if (closestMarkerRef.current) {
       const ca = simResult.closestApproach;
       const caX = ca.positionPlanetM.x * toSceneScale;
       const caY = ca.positionPlanetM.y * toSceneScale;
       closestMarkerRef.current.position.set(caX, 0, caY);
-      closestMarkerRef.current.visible = !isSunFrame && !simResult.collisionDetected;
-    }
-  }, [simResult, referenceFrame, showTrajectoryTrail]);
-
-  // Update Probe Position and Vectors on every playback step
-  useEffect(() => {
-    if (!simResult || simResult.trajectory.length === 0) return;
-    const idx = Math.min(currentPlaybackIndex, simResult.trajectory.length - 1);
-    const pt: TrajectoryPoint = simResult.trajectory[idx];
-    const planetRadiusM = simResult.config.planet.radiusM;
-    const toSceneScale = VISUAL_PLANET_RADIUS / planetRadiusM;
-
-    const probe = probeMeshRef.current;
-    const isSunFrame = referenceFrame === 'HELIOCENTRIC';
-
-    let scX = 0;
-    let scZ = 0;
-    let vx = 0;
-    let vz = 0;
-
-    if (isSunFrame) {
-      const originPlanet = simResult.trajectory[0].planetPosSunM;
-      scX = (pt.posSunM.x - originPlanet.x) * toSceneScale;
-      scZ = (pt.posSunM.y - originPlanet.y) * toSceneScale;
-      vx = pt.velSunMPerS.x;
-      vz = pt.velSunMPerS.y;
-
-      // In Sun frame, planet moves too
-      if (planetGroupRef.current) {
-        const pX = (pt.planetPosSunM.x - originPlanet.x) * toSceneScale;
-        const pZ = (pt.planetPosSunM.y - originPlanet.y) * toSceneScale;
-        planetGroupRef.current.position.set(pX, 0, pZ);
-        if (collisionSphereRef.current) {
-          collisionSphereRef.current.position.set(pX, 0, pZ);
-        }
-      }
-    } else {
-      scX = pt.posPlanetM.x * toSceneScale;
-      scZ = pt.posPlanetM.y * toSceneScale;
-      vx = pt.velPlanetMPerS.x;
-      vz = pt.velPlanetMPerS.y;
-
-      if (planetGroupRef.current) {
-        planetGroupRef.current.position.set(0, 0, 0);
-        if (collisionSphereRef.current) {
-          collisionSphereRef.current.position.set(0, 0, 0);
-        }
-      }
+      closestMarkerRef.current.visible = showPeriMarker && !isSunFrame && !simResult.collisionDetected;
     }
 
-    if (probe) {
-      probe.position.set(scX, 0, scZ);
-      // Align probe with direction of motion
-      const heading = Math.atan2(vz, vx);
-      probe.rotation.y = -heading;
+    // Impact parameter offset line (in planet frame)
+    if (!isSunFrame && showPeriMarker) {
+      const bM = simResult.analytical.impactParameterM;
+      const bScaled = bM * toSceneScale;
+      const bSign = simResult.config.passType === 'TRAILING' ? 1 : -1;
+      const appAngleRad = ((simResult.config.approachAngleDeg || 0) * Math.PI) / 180.0;
+
+      const impactPts = [
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(
+          -bScaled * Math.sin(appAngleRad) * bSign,
+          0,
+          bScaled * Math.cos(appAngleRad) * bSign
+        ),
+      ];
+      const impGeo = new THREE.BufferGeometry().setFromPoints(impactPts);
+      const impMat = new THREE.LineDashedMaterial({ color: 0xf59e0b, dashSize: 0.5, gapSize: 0.3 });
+      const impLine = new THREE.Line(impGeo, impMat);
+      impLine.computeLineDistances();
+      scene.add(impLine);
+      impactLineRef.current = impLine;
     }
-
-    // Dynamic Camera Tracking
-    if (cameraMode === 'PROBE_FOLLOW') {
-      targetLookAtRef.current.set(scX, 0, scZ);
-      cameraSphericalRef.current.radius = Math.max(8.0, cameraSphericalRef.current.radius);
-    } else if (cameraMode === 'CLOSE_UP') {
-      const ca = simResult.closestApproach;
-      const caX = isSunFrame ? scX : ca.positionPlanetM.x * toSceneScale;
-      const caZ = isSunFrame ? scZ : ca.positionPlanetM.y * toSceneScale;
-      targetLookAtRef.current.set(caX, 0, caZ);
-      cameraSphericalRef.current.radius = 12.0;
-    } else if (cameraMode === 'OVERVIEW') {
-      targetLookAtRef.current.set(0, 0, 0);
-      cameraSphericalRef.current.radius = 45.0;
-    }
-
-    // Dynamic Vector Arrows
-    const vecGroup = vectorsGroupRef.current;
-    if (vecGroup) {
-      while (vecGroup.children.length > 0) {
-        vecGroup.remove(vecGroup.children[0]);
-      }
-
-      if (showVectors) {
-        const vScale = 0.0006; // Scaled for 3D visibility
-        // 1. Current velocity vector (Emerald)
-        const vLen = Math.hypot(vx, vz) * vScale;
-        if (vLen > 0.1) {
-          const vDir = new THREE.Vector3(vx, 0, vz).normalize();
-          const arrow = new THREE.ArrowHelper(vDir, new THREE.Vector3(scX, 0, scZ), vLen, 0x10b981, 0.4, 0.2);
-          vecGroup.add(arrow);
-        }
-
-        // 2. In Heliocentric frame, show planet velocity vector (Cyan)
-        if (isSunFrame && planetGroupRef.current) {
-          const pPos = planetGroupRef.current.position;
-          const pVDir = new THREE.Vector3(pt.planetVelSunMPerS.x, 0, pt.planetVelSunMPerS.y).normalize();
-          const pVLen = pt.planetVelSunMPerS.magnitude() * vScale;
-          const pArrow = new THREE.ArrowHelper(pVDir, pPos, pVLen, 0x38bdf8, 0.5, 0.25);
-          vecGroup.add(pArrow);
-        }
-
-        // 3. Assist vector (Rose) at periapsis
-        const deltaV = simResult.analytical.deltaVAssistMPerS;
-        const dVLen = deltaV.magnitude() * vScale * 1.5;
-        if (dVLen > 0.2) {
-          const dVDir = new THREE.Vector3(deltaV.x, 0, deltaV.y).normalize();
-          const dArrow = new THREE.ArrowHelper(
-            dVDir,
-            new THREE.Vector3(scX, 0.3, scZ),
-            dVLen,
-            0xf43f5e,
-            0.5,
-            0.25
-          );
-          vecGroup.add(dArrow);
-        }
-      }
-    }
-  }, [currentPlaybackIndex, simResult, referenceFrame, cameraMode, showVectors]);
+  }, [simResult, referenceFrame, showTrajectoryTrail, showPeriMarker]);
 
   return (
-    <div className="relative w-full h-[520px] bg-[#05060a] rounded-xs overflow-hidden border border-[#1f2433]">
+    <div className="relative w-full h-[540px] bg-[#030408] rounded-xs border border-[#1b2032] overflow-hidden select-none">
+      {/* Three.js Container */}
       <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
-      {/* Floating Viewport Overlays */}
-      <div className="absolute top-3 left-3 flex flex-wrap items-center gap-2 pointer-events-none">
-        <span className="px-2.5 py-1 bg-[#11141e]/90 border border-[#23293d] rounded-xs font-mono text-[10px] text-amber-400 font-bold tracking-wider">
-          {referenceFrame === 'PLANET_CENTRIC' ? 'FRAME: PLANET REST FRAME' : 'FRAME: HELIOCENTRIC INERTIAL FRAME'}
-        </span>
-        <span className="px-2 py-1 bg-[#11141e]/90 border border-[#23293d] rounded-xs font-mono text-[10px] text-neutral-300">
-          CAMERA: {cameraMode}
-        </span>
-        {simResult?.collisionDetected && (
-          <span className="px-2.5 py-1 bg-rose-600/90 text-white font-mono text-[10px] font-bold rounded-xs animate-pulse">
-            SURFACE IMPACT DETECTED (r ≤ Rp)
-          </span>
-        )}
+      {/* Top-Right Interactive Toolbar */}
+      <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10 font-mono text-[11px]">
+        {/* Reset Camera */}
+        <button
+          onClick={handleResetCamera}
+          title="Reset Camera (Overview)"
+          className="p-1.5 bg-[#0e121d]/90 hover:bg-[#1a2133] text-neutral-300 hover:text-white rounded-xs border border-[#252f48] backdrop-blur-sm transition-colors shadow-sm"
+        >
+          <RotateCcw size={14} />
+        </button>
+
+        {/* Equatorial Grid */}
+        <button
+          onClick={() => setShowEquatorialGrid((prev) => !prev)}
+          title="Toggle Reference Equatorial Plane Grid"
+          className={`p-1.5 rounded-xs border backdrop-blur-sm transition-colors shadow-sm ${
+            showEquatorialGrid
+              ? 'bg-amber-500/20 text-amber-300 border-amber-500/60'
+              : 'bg-[#0e121d]/90 text-neutral-400 border-[#252f48]'
+          }`}
+        >
+          <Grid size={14} />
+        </button>
+
+        {/* Gravitational Accel Vector Toggle */}
+        <button
+          onClick={() => setShowGravityVector((prev) => !prev)}
+          title="Toggle Gravitational Acceleration Vector (Purple: Points to Center)"
+          className={`p-1.5 rounded-xs border backdrop-blur-sm transition-colors shadow-sm ${
+            showGravityVector
+              ? 'bg-purple-500/20 text-purple-300 border-purple-500/60'
+              : 'bg-[#0e121d]/90 text-neutral-400 border-[#252f48]'
+          }`}
+        >
+          <Zap size={14} />
+        </button>
+
+        {/* Periapsis & Impact Parameter Marker Toggle */}
+        <button
+          onClick={() => setShowPeriMarker((prev) => !prev)}
+          title="Toggle Periapsis & Impact Parameter (b) Markers"
+          className={`p-1.5 rounded-xs border backdrop-blur-sm transition-colors shadow-sm ${
+            showPeriMarker
+              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/60'
+              : 'bg-[#0e121d]/90 text-neutral-400 border-[#252f48]'
+          }`}
+        >
+          <Target size={14} />
+        </button>
+
+        {/* Graphics & Attitude Settings Dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setShowSettingsDropdown((prev) => !prev)}
+            title="Graphics & Spacecraft Attitude Settings"
+            className="p-1.5 bg-[#0e121d]/90 hover:bg-[#1a2133] text-neutral-300 hover:text-white rounded-xs border border-[#252f48] backdrop-blur-sm transition-colors shadow-sm flex items-center gap-1"
+          >
+            <Settings size={14} />
+          </button>
+
+          {showSettingsDropdown && (
+            <div className="absolute right-0 top-8 w-56 bg-[#0b0e17]/95 border border-[#252f48] p-3 rounded-xs shadow-xl backdrop-blur-md flex flex-col gap-2.5 text-xs text-neutral-200">
+              <div className="flex justify-between items-center border-b border-[#20283d] pb-1.5 text-[10px] text-neutral-400">
+                <span className="font-bold uppercase tracking-wider text-sky-400">3D DISPLAY SETTINGS</span>
+                <button
+                  onClick={() => setShowSettingsDropdown(false)}
+                  className="hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Graphics Quality */}
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-neutral-400">GRAPHICS QUALITY</span>
+                <div className="grid grid-cols-3 gap-1 text-[10px]">
+                  {(['HIGH', 'BALANCED', 'PERFORMANCE'] as GraphicsQuality[]).map((q) => (
+                    <button
+                      key={q}
+                      onClick={() => setQuality(q)}
+                      className={`py-1 rounded-xs border transition-colors ${
+                        quality === q
+                          ? 'bg-sky-500 text-black font-bold border-sky-400'
+                          : 'bg-[#141926] text-neutral-400 border-[#242e44] hover:text-white'
+                      }`}
+                    >
+                      {q[0]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Spacecraft Attitude Mode */}
+              <div className="flex flex-col gap-1 pt-1 border-t border-[#20283d]">
+                <span className="text-[10px] text-neutral-400">SPACECRAFT ATTITUDE</span>
+                <select
+                  value={attitudeMode}
+                  onChange={(e) => setAttitudeMode(e.target.value as SpacecraftAttitudeMode)}
+                  className="w-full bg-[#141926] border border-[#242e44] rounded-xs px-2 py-1 text-[11px] text-amber-300"
+                >
+                  <option value="VELOCITY_ALIGNED">VELOCITY ALIGNED</option>
+                  <option value="SUN_POINTING">SUN / EARTH POINTING</option>
+                  <option value="INERTIAL">INERTIALLY STABILIZED</option>
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Camera and Legend Hints */}
-      <div className="absolute bottom-3 left-3 text-[10px] font-mono text-neutral-400 bg-[#090b10]/80 px-2.5 py-1.5 rounded-xs border border-[#181d2b] pointer-events-none flex items-center gap-3">
-        <span>DRAG TO ORBIT</span>
-        <span>•</span>
-        <span>SCROLL TO ZOOM</span>
-        <span>•</span>
-        <span className="flex items-center gap-1 text-emerald-400">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" /> v_current
-        </span>
-        <span className="flex items-center gap-1 text-sky-400">
-          <span className="w-2 h-2 rounded-full bg-sky-400 inline-block" /> V_planet
-        </span>
-        <span className="flex items-center gap-1 text-rose-400">
-          <span className="w-2 h-2 rounded-full bg-rose-400 inline-block" /> Δv_assist
-        </span>
+      {/* Top-Left Reference Frame & Camera Overlay */}
+      <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10 font-mono text-[11px]">
+        <div className="bg-[#0b0e17]/85 border border-[#222a40] px-2.5 py-1.5 rounded-xs backdrop-blur-sm flex items-center gap-2 shadow-sm">
+          <Compass size={13} className="text-amber-400" />
+          <span className="text-neutral-400 text-[10px]">FRAME:</span>
+          <button
+            onClick={() => {
+              if (onReferenceFrameChange) {
+                onReferenceFrameChange(
+                  referenceFrame === 'PLANET_CENTRIC' ? 'HELIOCENTRIC' : 'PLANET_CENTRIC'
+                );
+              }
+            }}
+            className="text-amber-300 font-bold hover:underline cursor-pointer"
+          >
+            {referenceFrame === 'PLANET_CENTRIC' ? 'PLANET-CENTRIC (REST)' : 'HELIOCENTRIC (SUN-CENTRIC)'}
+          </button>
+        </div>
+
+        {/* Dynamic State Overlay */}
+        <div className="bg-[#0b0e17]/85 border border-[#222a40] px-2.5 py-1 rounded-xs backdrop-blur-sm flex items-center gap-3 text-[10px] text-neutral-300 shadow-sm">
+          <div>
+            PLANET: <strong className="text-white">{simResult?.config.planet.name.toUpperCase() || '—'}</strong>
+          </div>
+          <div>
+            MODE: <strong className="text-sky-400">{cameraMode}</strong>
+          </div>
+          <div>
+            FPS: <strong className="text-emerald-400">60 CONTINUOUS</strong>
+          </div>
+        </div>
       </div>
+
+      {/* Collision Warning Banner */}
+      {simResult?.collisionDetected && (
+        <div className="absolute bottom-3 left-3 right-3 bg-rose-950/90 border border-rose-500/70 p-2.5 rounded-xs backdrop-blur-sm flex items-center justify-between text-rose-200 font-mono text-xs z-10 shadow-lg">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+            <strong className="text-rose-100 uppercase tracking-wide">SURFACE COLLISION EVENT</strong>
+            <span className="text-rose-300 text-[11px]">
+              Trajectory intersects physical planetary surface (r &le; R_p). Spacecraft halted at impact.
+            </span>
+          </div>
+          <span className="text-[10px] bg-rose-900/60 px-2 py-0.5 rounded-xs border border-rose-700 font-bold">
+            TERMINAL IMPACT
+          </span>
+        </div>
+      )}
     </div>
   );
 };
