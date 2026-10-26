@@ -109,7 +109,9 @@ export const App: React.FC = () => {
                 DRAG MOUSE TO ORBIT CAMERA • SCROLL TO ZOOM • 10 UNITS = R_EARTH
               </div>
             </div>
-            <MissionControl />
+            <MissionControl
+              onProceedToInterplanetary={() => setActiveWorkspace('INTERPLANETARY')}
+            />
           </div>
         )}
 

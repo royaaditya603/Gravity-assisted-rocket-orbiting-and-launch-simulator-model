@@ -577,4 +577,28 @@ export class SimulationEngine {
   public get rocketInstance(): Rocket {
     return this.rocket;
   }
+
+  public get thrustForceVector(): Vector3D {
+    return this.thrustForce.clone();
+  }
+
+  public get gravityForceVector(): Vector3D {
+    return this.gravityForce.clone();
+  }
+
+  public get dragForceVector(): Vector3D {
+    return this.dragForce.clone();
+  }
+
+  public get currentDynamicPressurePa(): number {
+    return this.dynamicPressurePa;
+  }
+
+  public get currentTimeS(): number {
+    return this.timeS;
+  }
+
+  public get hasLandedOrImpacted(): boolean {
+    return this.hasImpacted;
+  }
 }

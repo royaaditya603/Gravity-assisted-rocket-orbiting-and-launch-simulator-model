@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { SimulationManager } from '../../simulation/SimulationManager';
-import { SimulationCanvas } from './viewport/SimulationCanvas';
+import { SimulationCanvas, CameraMode } from './viewport/SimulationCanvas';
 import { TelemetryHUD } from './hud/TelemetryHUD';
 import { ControlDeck } from './controls/ControlDeck';
 import { TelemetryCharts } from './charts/TelemetryCharts';
 import { PhysicsExplainer } from './hud/PhysicsExplainer';
 
-export const MissionControl: React.FC = () => {
+interface MissionControlProps {
+  onProceedToInterplanetary?: () => void;
+}
+
+export const MissionControl: React.FC<MissionControlProps> = ({ onProceedToInterplanetary }) => {
   const [sim] = useState<SimulationManager>(() => new SimulationManager());
-  const [cameraMode, setCameraMode] = useState<'CHASE' | 'ORBIT' | 'PAD'>('ORBIT');
+  const [cameraMode, setCameraMode] = useState<CameraMode>('ORBIT');
+  const [showVectors, setShowVectors] = useState<boolean>(true);
   const [isChartsOpen, setIsChartsOpen] = useState<boolean>(false);
   const [, setTick] = useState<number>(0);
 
@@ -26,9 +31,9 @@ export const MissionControl: React.FC = () => {
   }, []);
 
   return (
-    <section id="mission-control" className="relative w-full h-[85vh] min-h-[650px] bg-[#06070a] border-t border-b border-[#232733] overflow-hidden select-none">
+    <section id="mission-control" className="relative w-full h-[85vh] min-h-[680px] bg-[#06070a] border-t border-b border-[#232733] overflow-hidden select-none">
       {/* 3D WebGL Canvas */}
-      <SimulationCanvas sim={sim} cameraMode={cameraMode} />
+      <SimulationCanvas sim={sim} cameraMode={cameraMode} showVectors={showVectors} />
 
       {/* Real-time Telemetry HUD (Left) */}
       <TelemetryHUD sim={sim} />
@@ -48,6 +53,9 @@ export const MissionControl: React.FC = () => {
         sim={sim}
         cameraMode={cameraMode}
         setCameraMode={setCameraMode}
+        showVectors={showVectors}
+        onToggleVectors={() => setShowVectors(!showVectors)}
+        onProceedToInterplanetary={onProceedToInterplanetary}
         onStateChange={handleStateChange}
       />
     </section>
