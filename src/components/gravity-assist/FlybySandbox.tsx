@@ -36,12 +36,16 @@ export interface FlybySandboxProps {
   initialView?: 'SIMULATION' | 'ANALYSIS';
   graphicsQuality?: GraphicsQuality;
   reducedMotion?: boolean;
+  spacecraftModel?: 'PROBE' | 'ROCKET';
+  onChangeSpacecraftModel?: (model: 'PROBE' | 'ROCKET') => void;
 }
 
 export const FlybySandbox: React.FC<FlybySandboxProps> = ({
   initialView = 'SIMULATION',
   graphicsQuality = 'HIGH',
   reducedMotion = false,
+  spacecraftModel = 'PROBE',
+  onChangeSpacecraftModel,
 }) => {
   const [activeTab, setActiveTab] = useState<'SIMULATION' | 'ANALYSIS'>(initialView);
 
@@ -448,6 +452,10 @@ export const FlybySandbox: React.FC<FlybySandboxProps> = ({
                 playbackSpeed={playbackSpeed}
                 onCameraChange={setCameraMode}
                 onPlaybackIndexChange={handleSeek}
+                graphicsQuality={graphicsQuality}
+                reducedMotion={reducedMotion}
+                spacecraftModel={spacecraftModel}
+                onChangeSpacecraftModel={onChangeSpacecraftModel}
                 title="PLANET-RELATIVE FRAME (||v_∞|| CONSERVED)"
                 heightClass="h-[520px]"
               />
@@ -464,6 +472,10 @@ export const FlybySandbox: React.FC<FlybySandboxProps> = ({
                 playbackSpeed={playbackSpeed}
                 onCameraChange={setCameraMode}
                 onPlaybackIndexChange={handleSeek}
+                graphicsQuality={graphicsQuality}
+                reducedMotion={reducedMotion}
+                spacecraftModel={spacecraftModel}
+                onChangeSpacecraftModel={onChangeSpacecraftModel}
                 title="SUN-RELATIVE HELIOCENTRIC FRAME (MOMENTUM TRANSFER)"
                 heightClass="h-[520px]"
               />
@@ -481,6 +493,10 @@ export const FlybySandbox: React.FC<FlybySandboxProps> = ({
               onCameraChange={setCameraMode}
               onReferenceFrameChange={(f) => setViewFrameMode(f)}
               onPlaybackIndexChange={handleSeek}
+              graphicsQuality={graphicsQuality}
+              reducedMotion={reducedMotion}
+              spacecraftModel={spacecraftModel}
+              onChangeSpacecraftModel={onChangeSpacecraftModel}
               title={viewFrameMode === 'PLANET_CENTRIC' ? 'PLANET-CENTRIC REST FRAME' : 'HELIOCENTRIC SUN FRAME'}
               heightClass="h-[580px]"
             />

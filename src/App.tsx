@@ -91,6 +91,8 @@ export const App: React.FC = () => {
             initialView="SIMULATION"
             graphicsQuality={graphicsQuality}
             reducedMotion={reducedMotion}
+            spacecraftModel={spacecraftModel}
+            onChangeSpacecraftModel={setSpacecraftModel}
           />
         )}
 
@@ -120,6 +122,8 @@ export const App: React.FC = () => {
             initialView="ANALYSIS"
             graphicsQuality={graphicsQuality}
             reducedMotion={reducedMotion}
+            spacecraftModel={spacecraftModel}
+            onChangeSpacecraftModel={setSpacecraftModel}
           />
         )}
       </main>

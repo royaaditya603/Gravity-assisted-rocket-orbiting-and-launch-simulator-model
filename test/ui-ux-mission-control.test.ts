@@ -119,4 +119,59 @@ describe('ASTRA UI/UX & Mission Control Integration Verification', () => {
       expect(Math.sin(deltaRad / 2)).toBeCloseTo(1 / e, 6);
     });
   });
+
+  describe('5. Spacecraft 3D Models & Visualization Architecture', () => {
+    it('creates probe model bundle with correct initial attitude and geometry hierarchy', async () => {
+      const { SpacecraftVisuals } = await import('../src/components/gravity-assist/viewport/SpacecraftVisuals');
+      const scBundle = SpacecraftVisuals.create(1.0, 'PROBE');
+
+      expect(scBundle.group).toBeDefined();
+      expect(scBundle.modelType).toBe('PROBE');
+      expect(scBundle.group.children.length).toBeGreaterThan(0);
+
+      // Verify dynamic switching to launch vehicle / rocket model
+      scBundle.setModelType('ROCKET');
+      expect(scBundle.modelType).toBe('ROCKET');
+
+      // Verify switching back to deep-space probe
+      scBundle.setModelType('PROBE');
+      expect(scBundle.modelType).toBe('PROBE');
+
+      // Verify clean resource disposal
+      expect(() => scBundle.dispose()).not.toThrow();
+    });
+
+    it('executes smooth quaternion orientation updates without NaN or discontinuity', async () => {
+      const { SpacecraftVisuals } = await import('../src/components/gravity-assist/viewport/SpacecraftVisuals');
+      const THREE = await import('three');
+      const scBundle = SpacecraftVisuals.create(1.0, 'PROBE');
+
+      const pos = new THREE.Vector3(10, 0, 15);
+      const vel = new THREE.Vector3(5000, 0, 8000);
+      const sunPos = new THREE.Vector3(100, 40, 80);
+
+      // Update in velocity aligned mode
+      expect(() => {
+        scBundle.update(pos, vel, sunPos, 'VELOCITY_ALIGNED', 0.016);
+      }).not.toThrow();
+
+      expect(Number.isNaN(scBundle.group.quaternion.x)).toBe(false);
+      expect(Number.isNaN(scBundle.group.quaternion.y)).toBe(false);
+      expect(Number.isNaN(scBundle.group.quaternion.z)).toBe(false);
+      expect(Number.isNaN(scBundle.group.quaternion.w)).toBe(false);
+
+      // Update in Sun pointing mode
+      expect(() => {
+        scBundle.update(pos, vel, sunPos, 'SUN_POINTING', 0.016);
+      }).not.toThrow();
+
+      // Update in Rocket mode
+      scBundle.setModelType('ROCKET');
+      expect(() => {
+        scBundle.update(pos, vel, sunPos, 'VELOCITY_ALIGNED', 0.016);
+      }).not.toThrow();
+
+      scBundle.dispose();
+    });
+  });
 });

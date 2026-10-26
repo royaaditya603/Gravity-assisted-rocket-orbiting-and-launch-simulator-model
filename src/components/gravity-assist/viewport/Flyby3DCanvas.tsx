@@ -939,6 +939,39 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
                 </div>
               </div>
 
+              {/* Spacecraft 3D Model Selection */}
+              <div className="flex flex-col gap-1 pt-1 border-t border-[#20283d]">
+                <span className="text-[10px] text-neutral-400">SPACECRAFT 3D MODEL</span>
+                <div className="grid grid-cols-2 gap-1 text-[10px]">
+                  <button
+                    onClick={() => {
+                      if (spacecraftBundleRef.current) spacecraftBundleRef.current.setModelType('PROBE');
+                      onChangeSpacecraftModel?.('PROBE');
+                    }}
+                    className={`py-1 px-1.5 rounded-xs border transition-colors ${
+                      (spacecraftBundleRef.current?.modelType || spacecraftModel) === 'PROBE'
+                        ? 'bg-amber-500 text-black font-bold border-amber-400'
+                        : 'bg-[#141926] text-neutral-400 border-[#242e44] hover:text-white'
+                    }`}
+                  >
+                    PROBE
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (spacecraftBundleRef.current) spacecraftBundleRef.current.setModelType('ROCKET');
+                      onChangeSpacecraftModel?.('ROCKET');
+                    }}
+                    className={`py-1 px-1.5 rounded-xs border transition-colors ${
+                      (spacecraftBundleRef.current?.modelType || spacecraftModel) === 'ROCKET'
+                        ? 'bg-amber-500 text-black font-bold border-amber-400'
+                        : 'bg-[#141926] text-neutral-400 border-[#242e44] hover:text-white'
+                    }`}
+                  >
+                    ROCKET
+                  </button>
+                </div>
+              </div>
+
               {/* Spacecraft Attitude Mode */}
               <div className="flex flex-col gap-1 pt-1 border-t border-[#20283d]">
                 <span className="text-[10px] text-neutral-400">SPACECRAFT ATTITUDE</span>
