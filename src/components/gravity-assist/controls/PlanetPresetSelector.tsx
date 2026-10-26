@@ -1,7 +1,6 @@
 import React from 'react';
-import { PlanetaryBodyData, PLANETARY_BODIES, AU } from '../../../physics/constants';
+import { AU } from '../../../physics/constants';
 import {
-  PLANETARY_DATA,
   JUPITER_PRESET,
   SATURN_PRESET,
   EARTH_PRESET,
@@ -13,7 +12,7 @@ import {
 } from '../../../physics/planetaryData';
 import { FlybyScenarioConfig, getEducationalPresets } from '../../../physics/FlybyScenario';
 import { ParameterTooltip, UnitBadge } from './ParameterTooltip';
-import { Globe, Info, Sparkles, BookOpen } from 'lucide-react';
+import { Globe, Info, BookOpen } from 'lucide-react';
 
 export interface PlanetPresetSelectorProps {
   selectedPresetId: string;
@@ -65,13 +64,13 @@ export const PlanetPresetSelector: React.FC<PlanetPresetSelectorProps> = ({
       : '0.00';
 
   return (
-    <div className="flex flex-col gap-4 font-mono text-white">
+    <div className="flex flex-col gap-4 font-mono text-[#263247]">
       {/* 1. Primary Planet Preset Buttons */}
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
-            <Globe size={14} className="text-amber-400" />
-            <span className="text-[11px] font-bold text-neutral-300 uppercase">
+            <Globe size={14} className="text-[#0284C7]" />
+            <span className="text-[11px] font-bold text-[#263247] uppercase">
               PLANETARY BODY PRESET SELECTION:
             </span>
             <ParameterTooltip
@@ -80,7 +79,7 @@ export const PlanetPresetSelector: React.FC<PlanetPresetSelectorProps> = ({
               source="NASA / IAU 2015 / JPL DE440"
             />
           </div>
-          <span className="text-[10px] text-neutral-400">
+          <span className="text-[10px] text-[#68758A]">
             Source: NASA Planetary Fact Sheets / IAU 2015 WGCCRE
           </span>
         </div>
@@ -98,17 +97,17 @@ export const PlanetPresetSelector: React.FC<PlanetPresetSelectorProps> = ({
                 key={p.key}
                 type="button"
                 onClick={() => onSelectPreset(p.key)}
-                className={`py-2 px-3 text-xs font-bold rounded-xs transition-all border cursor-pointer text-left flex flex-col gap-0.5 ${
+                className={`py-2 px-3 text-xs font-bold rounded-xl transition-all border cursor-pointer text-left flex flex-col gap-0.5 ${
                   isSelected
-                    ? 'bg-amber-500 text-black border-amber-400 shadow-md ring-1 ring-amber-400'
-                    : 'bg-[#141724] text-neutral-300 hover:text-white hover:bg-[#1a1f30] border-[#252c40]'
+                    ? 'bg-[#A9D4F5] text-[#14426B] border-[#A9D4F5] shadow-xs ring-2 ring-[#A9D4F5]/50'
+                    : 'bg-[#F8FAFD] text-[#263247] hover:bg-[#EEF2F8] border-[#DCE3EE]'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className="uppercase">{p.label}</span>
-                  {isSelected && <span className="text-[9px] px-1 bg-black/30 text-black rounded-xs">ACTIVE</span>}
+                  {isSelected && <span className="text-[9px] px-1.5 py-0.2 bg-[#14426B]/15 text-[#14426B] rounded-md font-bold">ACTIVE</span>}
                 </div>
-                <span className={`text-[9px] font-normal ${isSelected ? 'text-black/80' : 'text-neutral-500'}`}>
+                <span className={`text-[9px] font-normal ${isSelected ? 'text-[#14426B]/80' : 'text-[#68758A]'}`}>
                   {p.subtitle}
                 </span>
               </button>
@@ -118,7 +117,7 @@ export const PlanetPresetSelector: React.FC<PlanetPresetSelectorProps> = ({
 
         {/* Other Solar System Bodies dropdown/row */}
         <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[11px]">
-          <span className="text-neutral-500 text-[10px]">ADDITIONAL SOLAR SYSTEM BODIES:</span>
+          <span className="text-[#68758A] text-[10px] font-medium">ADDITIONAL SOLAR SYSTEM BODIES:</span>
           {SECONDARY_PRESETS.map((p) => {
             const isSelected = selectedPresetId === p.key && !isCustomPlanet;
             return (
@@ -126,10 +125,10 @@ export const PlanetPresetSelector: React.FC<PlanetPresetSelectorProps> = ({
                 key={p.key}
                 type="button"
                 onClick={() => onSelectPreset(p.key)}
-                className={`px-2 py-0.5 rounded-xs border text-[10px] cursor-pointer transition-colors ${
+                className={`px-2.5 py-1 rounded-lg border text-[10px] cursor-pointer transition-colors ${
                   isSelected
-                    ? 'bg-amber-500 text-black font-bold border-amber-400'
-                    : 'bg-[#10131d] text-neutral-400 hover:text-neutral-200 border-[#1f2538]'
+                    ? 'bg-[#A9D4F5] text-[#14426B] font-bold border-[#A9D4F5] shadow-2xs'
+                    : 'bg-[#EEF2F8] text-[#68758A] hover:text-[#263247] border-[#DCE3EE]'
                 }`}
               >
                 {p.label}
@@ -140,80 +139,80 @@ export const PlanetPresetSelector: React.FC<PlanetPresetSelectorProps> = ({
       </div>
 
       {/* 2. Physical Constants Dossier Card */}
-      <div className="bg-[#0b0c13] p-3.5 rounded-xs border border-[#1e2436] flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#181d2c] pb-2">
+      <div className="bg-[#F8FAFD] p-4 rounded-xl border border-[#DCE3EE] flex flex-col gap-3 shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#DCE3EE] pb-2">
           <div className="flex items-center gap-2">
             <span
-              className="w-3 h-3 rounded-full border border-white/20"
+              className="w-3 h-3 rounded-full border border-[#DCE3EE]"
               style={{ backgroundColor: planetData.color || '#4f9fff' }}
             />
-            <span className="text-xs font-bold text-amber-300 uppercase">
+            <span className="text-xs font-bold text-[#14426B] uppercase">
               {planetData.name} — Physical Constants & Orbital Parameters
             </span>
           </div>
-          <span className="text-[10px] text-neutral-400">
+          <span className="text-[10px] text-[#68758A]">
             {planetData.sourceOrReference || 'NASA Planetary Fact Sheet / JPL DE440'}
           </span>
         </div>
 
         {/* Constants Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
-          <div className="bg-[#121522] p-2 rounded-xs border border-[#1e2336] flex flex-col gap-0.5">
+          <div className="bg-white p-2.5 rounded-lg border border-[#DCE3EE] flex flex-col gap-0.5 shadow-2xs">
             <div className="flex items-center justify-between">
-              <span className="text-neutral-500 text-[10px]">MASS (M)</span>
+              <span className="text-[#68758A] text-[10px]">MASS (M)</span>
               <UnitBadge unit="kg" />
             </div>
-            <div className="text-white font-bold text-[11px] truncate" title={`${planetData.massKg} kg`}>
+            <div className="text-[#263247] font-bold text-[11px] truncate" title={`${planetData.massKg} kg`}>
               {planetData.massKg.toExponential(4)}
             </div>
           </div>
 
-          <div className="bg-[#121522] p-2 rounded-xs border border-[#1e2336] flex flex-col gap-0.5">
+          <div className="bg-white p-2.5 rounded-lg border border-[#DCE3EE] flex flex-col gap-0.5 shadow-2xs">
             <div className="flex items-center justify-between">
-              <span className="text-neutral-500 text-[10px]">MEAN RADIUS (R_p)</span>
+              <span className="text-[#68758A] text-[10px]">MEAN RADIUS (R_p)</span>
               <UnitBadge unit="km" />
             </div>
-            <div className="text-white font-bold text-[11px]">
+            <div className="text-[#263247] font-bold text-[11px]">
               {(planetData.radiusM / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}
             </div>
           </div>
 
-          <div className="bg-[#121522] p-2 rounded-xs border border-[#1e2336] flex flex-col gap-0.5">
+          <div className="bg-white p-2.5 rounded-lg border border-[#DCE3EE] flex flex-col gap-0.5 shadow-2xs">
             <div className="flex items-center justify-between">
-              <span className="text-neutral-500 text-[10px]">GRAV. PARAMETER (μ)</span>
+              <span className="text-[#68758A] text-[10px]">GRAV. PARAMETER (μ)</span>
               <UnitBadge unit="m³/s²" />
             </div>
-            <div className="text-amber-400 font-bold text-[11px] truncate" title={`${planetData.mu} m³/s²`}>
+            <div className="text-[#B45309] font-bold text-[11px] truncate" title={`${planetData.mu} m³/s²`}>
               {planetData.mu.toExponential(4)}
             </div>
           </div>
 
-          <div className="bg-[#121522] p-2 rounded-xs border border-[#1e2336] flex flex-col gap-0.5">
+          <div className="bg-white p-2.5 rounded-lg border border-[#DCE3EE] flex flex-col gap-0.5 shadow-2xs">
             <div className="flex items-center justify-between">
-              <span className="text-neutral-500 text-[10px]">SEMI-MAJOR AXIS (a)</span>
+              <span className="text-[#68758A] text-[10px]">SEMI-MAJOR AXIS (a)</span>
               <UnitBadge unit="AU" />
             </div>
-            <div className="text-sky-400 font-bold text-[11px]">
+            <div className="text-[#0284C7] font-bold text-[11px]">
               {(planetData.semiMajorAxisM / AU).toFixed(3)}
             </div>
           </div>
 
-          <div className="bg-[#121522] p-2 rounded-xs border border-[#1e2336] flex flex-col gap-0.5">
+          <div className="bg-white p-2.5 rounded-lg border border-[#DCE3EE] flex flex-col gap-0.5 shadow-2xs">
             <div className="flex items-center justify-between">
-              <span className="text-neutral-500 text-[10px]">ORBITAL SPEED (v_orb)</span>
+              <span className="text-[#68758A] text-[10px]">ORBITAL SPEED (v_orb)</span>
               <UnitBadge unit="km/s" />
             </div>
-            <div className="text-emerald-400 font-bold text-[11px]">
+            <div className="text-[#059669] font-bold text-[11px]">
               {(planetData.orbitalSpeedMPerS / 1000).toFixed(2)}
             </div>
           </div>
 
-          <div className="bg-[#121522] p-2 rounded-xs border border-[#1e2336] flex flex-col gap-0.5">
+          <div className="bg-white p-2.5 rounded-lg border border-[#DCE3EE] flex flex-col gap-0.5 shadow-2xs">
             <div className="flex items-center justify-between">
-              <span className="text-neutral-500 text-[10px]">SURFACE GRAVITY (g)</span>
+              <span className="text-[#68758A] text-[10px]">SURFACE GRAVITY (g)</span>
               <UnitBadge unit="m/s²" />
             </div>
-            <div className="text-purple-400 font-bold text-[11px]">
+            <div className="text-[#7C3AED] font-bold text-[11px]">
               {surfaceGravity}
             </div>
           </div>
@@ -221,7 +220,7 @@ export const PlanetPresetSelector: React.FC<PlanetPresetSelectorProps> = ({
 
         {/* Ring Parameters (if applicable) */}
         {planetData.ringInnerRadiusM && planetData.ringOuterRadiusM && (
-          <div className="bg-[#101320] px-3 py-1.5 rounded-xs border border-[#20273d] flex items-center justify-between text-[10px] text-yellow-300/90">
+          <div className="bg-[#FFFBEB] px-3 py-2 rounded-lg border border-[#FDE68A] flex items-center justify-between text-[10px] text-[#92400E]">
             <span>
               <strong>PLANETARY RING SYSTEM:</strong> Inner boundary:{' '}
               {(planetData.ringInnerRadiusM / 1000).toLocaleString()} km • Outer boundary:{' '}
@@ -231,8 +230,8 @@ export const PlanetPresetSelector: React.FC<PlanetPresetSelectorProps> = ({
         )}
 
         {/* Model Simplification Disclaimer */}
-        <div className="flex items-start gap-2 bg-[#08090f] p-2.5 rounded-xs border border-[#171a26] text-[10px] text-neutral-400 leading-relaxed">
-          <Info size={14} className="text-sky-400 flex-shrink-0 mt-0.5" />
+        <div className="flex items-start gap-2 bg-white p-3 rounded-lg border border-[#DCE3EE] text-[10px] text-[#68758A] leading-relaxed">
+          <Info size={14} className="text-[#0284C7] flex-shrink-0 mt-0.5" />
           <span>
             <strong>ENGINEERING SIMPLIFICATION NOTICE:</strong>{' '}
             {planetData.modelSimplificationNote ||
@@ -245,28 +244,28 @@ export const PlanetPresetSelector: React.FC<PlanetPresetSelectorProps> = ({
       {onSelectEducationalPreset && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-1.5">
-            <BookOpen size={13} className="text-sky-400" />
-            <span className="text-[11px] font-bold text-neutral-300 uppercase">
+            <BookOpen size={13} className="text-[#0284C7]" />
+            <span className="text-[11px] font-bold text-[#263247] uppercase">
               HISTORICAL & EDUCATIONAL FLIGHT SCENARIOS:
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
             {educationalPresets.map((edu) => (
               <button
                 key={edu.id}
                 type="button"
                 onClick={() => onSelectEducationalPreset(edu)}
-                className="bg-[#121524] hover:bg-[#1a1f33] p-2.5 rounded-xs border border-[#242b3e] hover:border-amber-500/50 text-left transition-all flex flex-col gap-1 cursor-pointer group"
+                className="bg-white hover:bg-[#F8FAFD] p-3 rounded-xl border border-[#DCE3EE] hover:border-[#A9D4F5] text-left transition-all flex flex-col gap-1 cursor-pointer group shadow-2xs"
               >
-                <span className="text-amber-300 font-bold text-xs group-hover:text-amber-200">
+                <span className="text-[#14426B] font-bold text-xs group-hover:text-[#0284C7]">
                   {edu.name}
                 </span>
-                <span className="text-[10px] text-neutral-400 line-clamp-2 leading-relaxed">
+                <span className="text-[10px] text-[#68758A] line-clamp-2 leading-relaxed">
                   {edu.description}
                 </span>
-                <div className="flex items-center justify-between text-[9px] text-sky-400 mt-1 pt-1 border-t border-[#1c2234]">
+                <div className="flex items-center justify-between text-[9px] text-[#0284C7] mt-1 pt-1 border-t border-[#DCE3EE]">
                   <span>v_∞: {(edu.encounter.vInfSpeedMPerS / 1000).toFixed(1)} km/s</span>
-                  <span className="font-bold text-neutral-300">{edu.encounter.passType}</span>
+                  <span className="font-bold text-[#263247]">{edu.encounter.passType}</span>
                 </div>
               </button>
             ))}

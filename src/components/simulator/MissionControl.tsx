@@ -31,7 +31,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({ onProceedToInter
   }, []);
 
   return (
-    <section id="mission-control" className="relative w-full h-[85vh] min-h-[680px] bg-[#06070a] border-t border-b border-[#232733] overflow-hidden select-none">
+    <section id="mission-control" className="relative w-full h-[85vh] min-h-[680px] bg-[#06070a] border-t border-b border-[#DCE3EE] overflow-hidden select-none">
       {/* 3D WebGL Canvas */}
       <SimulationCanvas sim={sim} cameraMode={cameraMode} showVectors={showVectors} />
 

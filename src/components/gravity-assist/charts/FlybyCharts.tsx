@@ -162,7 +162,7 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
     ctx.scale(dpr, dpr);
 
     // Background
-    ctx.fillStyle = '#08090d';
+    ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, w, h);
 
     const padLeft = 70;
@@ -173,7 +173,7 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
     const plotH = h - padTop - padBottom;
 
     // Grid background lines
-    ctx.strokeStyle = '#141724';
+    ctx.strokeStyle = '#EEF2F8';
     ctx.lineWidth = 1;
     for (let x = padLeft; x <= w - padRight; x += plotW / 6) {
       ctx.beginPath();
@@ -255,7 +255,7 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
     const drawScrubber = () => {
       if (totalTime > 0) {
         const curX = padLeft + (currentPt.timeS / totalTime) * plotW;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.strokeStyle = 'rgba(38, 50, 71, 0.7)';
         ctx.lineWidth = 1.0;
         ctx.setLineDash([2, 2]);
         ctx.beginPath();
@@ -1343,12 +1343,12 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
   }, [activeChart]);
 
   return (
-    <div className="w-full bg-[#0d0e14] border border-[#202434] p-4 rounded-xs flex flex-col gap-3 text-white">
+    <div className="w-full bg-white border border-[#DCE3EE] p-4 rounded-xl flex flex-col gap-3 text-[#263247] shadow-xs">
       {/* Top Header & Export Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#202434] pb-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#DCE3EE] pb-2.5">
         <div className="flex items-center gap-2">
-          <LineChart size={16} className="text-sky-400" />
-          <span className="font-mono text-xs font-bold uppercase tracking-wider text-neutral-200">
+          <LineChart size={16} className="text-[#0284C7]" />
+          <span className="font-mono text-xs font-bold uppercase tracking-wider text-[#14426B]">
             ASTRODYNAMICS SCIENTIFIC TELEMETRY & ANALYSIS CHARTS
           </span>
         </div>
@@ -1356,7 +1356,7 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={handleExportChartCSV}
-            className="flex items-center gap-1.5 px-2.5 py-1 bg-[#161a26] hover:bg-[#202638] text-amber-300 border border-[#2b334a] rounded-xs font-mono text-[10px] transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 py-1 bg-[#EEF2F8] hover:bg-[#E2E8F0] text-[#14426B] border border-[#DCE3EE] rounded-lg font-mono text-[10px] transition-colors cursor-pointer shadow-2xs font-semibold"
             title="Export chart data points as RFC-4180 CSV"
           >
             <Download size={12} />
@@ -1364,7 +1364,7 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
           </button>
           <button
             onClick={handleSnapshotPNG}
-            className="flex items-center gap-1.5 px-2.5 py-1 bg-[#161a26] hover:bg-[#202638] text-neutral-300 border border-[#2b334a] rounded-xs font-mono text-[10px] transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 py-1 bg-[#EEF2F8] hover:bg-[#E2E8F0] text-[#263247] border border-[#DCE3EE] rounded-lg font-mono text-[10px] transition-colors cursor-pointer shadow-2xs font-semibold"
             title="Download high-resolution image snapshot"
           >
             <Camera size={12} />
@@ -1375,15 +1375,15 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
 
       {/* Collision Alert Banner */}
       {simResult?.collisionDetected && (
-        <div className="bg-rose-950/60 border border-rose-600/60 p-2.5 rounded-xs flex items-center justify-between text-xs font-mono text-rose-200">
+        <div className="bg-[#FEE2E2] border border-[#FCA5A5] p-3 rounded-xl flex items-center justify-between text-xs font-mono text-[#991B1B] shadow-2xs">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444] animate-pulse" />
             <span className="font-bold uppercase tracking-wider">SURFACE COLLISION DETECTED</span>
-            <span className="text-neutral-300">
+            <span className="text-[#7F1D1D]">
               Trajectory intersects planetary radius (R_p = {(simResult.config.planet.radiusM / 1000).toLocaleString()} km) at T+{(simResult.collisionTimeS ?? 0).toFixed(0)}s. Post-impact exit velocities are physically unavailable.
             </span>
           </div>
-          <span className="text-[10px] bg-rose-900 px-2 py-0.5 rounded-xs border border-rose-500 font-bold">
+          <span className="text-[10px] bg-white px-2 py-0.5 rounded-md border border-[#FCA5A5] font-bold text-[#DC2626]">
             IMPACT TERMINATION
           </span>
         </div>
@@ -1393,10 +1393,10 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 font-mono text-[10px]">
         <button
           onClick={() => setActiveChart('DISTANCE_TIME')}
-          className={`px-2 py-1.5 rounded-xs transition-colors text-left flex flex-col justify-center border cursor-pointer ${
+          className={`px-2 py-1.5 rounded-lg transition-colors text-left flex flex-col justify-center border cursor-pointer ${
             activeChart === 'DISTANCE_TIME'
-              ? 'bg-emerald-500 text-black font-bold border-emerald-400'
-              : 'bg-[#12141e] text-neutral-400 hover:text-white border-[#1e2334]'
+              ? 'bg-[#AEE5D0] text-[#1D6C50] font-bold border-[#AEE5D0] shadow-2xs'
+              : 'bg-[#F8FAFD] text-[#68758A] hover:bg-[#EEF2F8] border-[#DCE3EE]'
           }`}
         >
           <span className="truncate">1. DISTANCE r(t)</span>
@@ -1405,10 +1405,10 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
 
         <button
           onClick={() => setActiveChart('ALTITUDE_TIME')}
-          className={`px-2 py-1.5 rounded-xs transition-colors text-left flex flex-col justify-center border cursor-pointer ${
+          className={`px-2 py-1.5 rounded-lg transition-colors text-left flex flex-col justify-center border cursor-pointer ${
             activeChart === 'ALTITUDE_TIME'
-              ? 'bg-cyan-500 text-black font-bold border-cyan-400'
-              : 'bg-[#12141e] text-neutral-400 hover:text-white border-[#1e2334]'
+              ? 'bg-[#A9D4F5] text-[#14426B] font-bold border-[#A9D4F5] shadow-2xs'
+              : 'bg-[#F8FAFD] text-[#68758A] hover:bg-[#EEF2F8] border-[#DCE3EE]'
           }`}
         >
           <span className="truncate">2. ALTITUDE h(t)</span>
@@ -1417,10 +1417,10 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
 
         <button
           onClick={() => setActiveChart('SPEED_PLANET_TIME')}
-          className={`px-2 py-1.5 rounded-xs transition-colors text-left flex flex-col justify-center border cursor-pointer ${
+          className={`px-2 py-1.5 rounded-lg transition-colors text-left flex flex-col justify-center border cursor-pointer ${
             activeChart === 'SPEED_PLANET_TIME'
-              ? 'bg-amber-500 text-black font-bold border-amber-400'
-              : 'bg-[#12141e] text-neutral-400 hover:text-white border-[#1e2334]'
+              ? 'bg-[#FFD2B8] text-[#7A3E1D] font-bold border-[#FFD2B8] shadow-2xs'
+              : 'bg-[#F8FAFD] text-[#68758A] hover:bg-[#EEF2F8] border-[#DCE3EE]'
           }`}
         >
           <span className="truncate">3. PLANET SPEED</span>
@@ -1429,10 +1429,10 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
 
         <button
           onClick={() => setActiveChart('SPEED_SUN_TIME')}
-          className={`px-2 py-1.5 rounded-xs transition-colors text-left flex flex-col justify-center border cursor-pointer ${
+          className={`px-2 py-1.5 rounded-lg transition-colors text-left flex flex-col justify-center border cursor-pointer ${
             activeChart === 'SPEED_SUN_TIME'
-              ? 'bg-sky-500 text-black font-bold border-sky-400'
-              : 'bg-[#12141e] text-neutral-400 hover:text-white border-[#1e2334]'
+              ? 'bg-[#A9D4F5] text-[#14426B] font-bold border-[#A9D4F5] shadow-2xs'
+              : 'bg-[#F8FAFD] text-[#68758A] hover:bg-[#EEF2F8] border-[#DCE3EE]'
           }`}
         >
           <span className="truncate">4. SUN SPEED</span>
@@ -1441,10 +1441,10 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
 
         <button
           onClick={() => setActiveChart('GRAVITY_TIME')}
-          className={`px-2 py-1.5 rounded-xs transition-colors text-left flex flex-col justify-center border cursor-pointer ${
+          className={`px-2 py-1.5 rounded-lg transition-colors text-left flex flex-col justify-center border cursor-pointer ${
             activeChart === 'GRAVITY_TIME'
-              ? 'bg-purple-500 text-black font-bold border-purple-400'
-              : 'bg-[#12141e] text-neutral-400 hover:text-white border-[#1e2334]'
+              ? 'bg-[#C9BDF2] text-[#4A347F] font-bold border-[#C9BDF2] shadow-2xs'
+              : 'bg-[#F8FAFD] text-[#68758A] hover:bg-[#EEF2F8] border-[#DCE3EE]'
           }`}
         >
           <span className="truncate">5. GRAVITY a_g(t)</span>
@@ -1453,10 +1453,10 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
 
         <button
           onClick={() => setActiveChart('TRAJECTORY_XY')}
-          className={`px-2 py-1.5 rounded-xs transition-colors text-left flex flex-col justify-center border cursor-pointer ${
+          className={`px-2 py-1.5 rounded-lg transition-colors text-left flex flex-col justify-center border cursor-pointer ${
             activeChart === 'TRAJECTORY_XY'
-              ? 'bg-amber-400 text-black font-bold border-amber-300'
-              : 'bg-[#12141e] text-neutral-400 hover:text-white border-[#1e2334]'
+              ? 'bg-[#FFD2B8] text-[#7A3E1D] font-bold border-[#FFD2B8] shadow-2xs'
+              : 'bg-[#F8FAFD] text-[#68758A] hover:bg-[#EEF2F8] border-[#DCE3EE]'
           }`}
         >
           <span className="truncate">6. X-Y TRAJECTORY</span>
@@ -1465,10 +1465,10 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
 
         <button
           onClick={() => setActiveChart('DEFLECTION_ALTITUDE')}
-          className={`px-2 py-1.5 rounded-xs transition-colors text-left flex flex-col justify-center border cursor-pointer ${
+          className={`px-2 py-1.5 rounded-lg transition-colors text-left flex flex-col justify-center border cursor-pointer ${
             activeChart === 'DEFLECTION_ALTITUDE'
-              ? 'bg-sky-400 text-black font-bold border-sky-300'
-              : 'bg-[#12141e] text-neutral-400 hover:text-white border-[#1e2334]'
+              ? 'bg-[#A9D4F5] text-[#14426B] font-bold border-[#A9D4F5] shadow-2xs'
+              : 'bg-[#F8FAFD] text-[#68758A] hover:bg-[#EEF2F8] border-[#DCE3EE]'
           }`}
         >
           <span className="truncate">7. DEFLECTION vs ALT</span>
@@ -1477,10 +1477,10 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
 
         <button
           onClick={() => setActiveChart('DEFLECTION_SPEED')}
-          className={`px-2 py-1.5 rounded-xs transition-colors text-left flex flex-col justify-center border cursor-pointer ${
+          className={`px-2 py-1.5 rounded-lg transition-colors text-left flex flex-col justify-center border cursor-pointer ${
             activeChart === 'DEFLECTION_SPEED'
-              ? 'bg-orange-500 text-black font-bold border-orange-400'
-              : 'bg-[#12141e] text-neutral-400 hover:text-white border-[#1e2334]'
+              ? 'bg-[#F2B9C6] text-[#83263E] font-bold border-[#F2B9C6] shadow-2xs'
+              : 'bg-[#F8FAFD] text-[#68758A] hover:bg-[#EEF2F8] border-[#DCE3EE]'
           }`}
         >
           <span className="truncate">8. DEFLECTION vs SPEED</span>
@@ -1489,10 +1489,10 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
 
         <button
           onClick={() => setActiveChart('SPEED_CHANGE_GEOMETRY')}
-          className={`px-2 py-1.5 rounded-xs transition-colors text-left flex flex-col justify-center border col-span-2 sm:col-span-1 cursor-pointer ${
+          className={`px-2 py-1.5 rounded-lg transition-colors text-left flex flex-col justify-center border col-span-2 sm:col-span-1 cursor-pointer ${
             activeChart === 'SPEED_CHANGE_GEOMETRY'
-              ? 'bg-emerald-400 text-black font-bold border-emerald-300'
-              : 'bg-[#12141e] text-neutral-400 hover:text-white border-[#1e2334]'
+              ? 'bg-[#AEE5D0] text-[#1D6C50] font-bold border-[#AEE5D0] shadow-2xs'
+              : 'bg-[#F8FAFD] text-[#68758A] hover:bg-[#EEF2F8] border-[#DCE3EE]'
           }`}
         >
           <span className="truncate">9. Δv vs GEOMETRY</span>
@@ -1501,12 +1501,12 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
       </div>
 
       {/* Chart Description Pill */}
-      <div className="bg-[#12141d] border border-[#1d2232] px-3 py-1.5 rounded-xs flex items-center justify-between text-[11px] font-mono text-neutral-300">
+      <div className="bg-[#F8FAFD] border border-[#DCE3EE] px-3.5 py-2 rounded-lg flex items-center justify-between text-[11px] font-mono text-[#263247]">
         <div className="flex items-center gap-2">
-          <Info size={13} className="text-amber-400" />
-          <span className="text-neutral-400">{chartMetadata.description}</span>
+          <Info size={13} className="text-[#0284C7]" />
+          <span className="text-[#68758A]">{chartMetadata.description}</span>
         </div>
-        <div className="text-[10px] text-neutral-500 hidden sm:block">
+        <div className="text-[10px] text-[#94A3B8] hidden sm:block">
           HOVER TO INSPECT • CLOSEST APPROACH (PERIAPSIS) HIGHLIGHTED
         </div>
       </div>
@@ -1517,65 +1517,65 @@ export const FlybyCharts: React.FC<FlybyChartsProps> = ({
           ref={canvasRef}
           onMouseMove={handleMouseMove}
           onMouseLeave={() => setHoverPoint(null)}
-          className="w-full h-[280px] rounded-xs border border-[#1b1f2d] block bg-[#08090d] cursor-crosshair"
+          className="w-full h-[280px] rounded-xl border border-[#DCE3EE] block bg-white cursor-crosshair shadow-2xs"
         />
       </div>
 
       {/* Numerical Telemetry Summary for Active Plot */}
       {simResult && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 text-[10px] font-mono bg-[#11131c] p-2.5 rounded-xs border border-[#1e2333]">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 text-[10px] font-mono bg-[#F8FAFD] p-3 rounded-xl border border-[#DCE3EE] shadow-2xs">
           <div>
-            <span className="text-neutral-500 block">CLOSEST APPROACH</span>
-            <span className={`font-bold ${simResult.collisionDetected ? 'text-rose-400' : 'text-emerald-400'}`}>
+            <span className="text-[#68758A] block font-medium">CLOSEST APPROACH</span>
+            <span className={`font-bold ${simResult.collisionDetected ? 'text-[#DC2626]' : 'text-[#059669]'}`}>
               {simResult.collisionDetected
                 ? `IMPACT (${(simResult.config.planet.radiusM / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} km)`
                 : `${(simResult.closestApproach.distanceM / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} km`}
             </span>
           </div>
           <div>
-            <span className="text-neutral-500 block">PERIAPSIS ALTITUDE</span>
-            <span className={`font-bold ${simResult.collisionDetected ? 'text-rose-400' : 'text-cyan-400'}`}>
+            <span className="text-[#68758A] block font-medium">PERIAPSIS ALTITUDE</span>
+            <span className={`font-bold ${simResult.collisionDetected ? 'text-[#DC2626]' : 'text-[#0284C7]'}`}>
               {simResult.collisionDetected
                 ? '0.0 km (COLLISION)'
                 : `${(simResult.closestApproach.altitudeM / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} km`}
             </span>
           </div>
           <div>
-            <span className="text-neutral-500 block">DEFLECTION ANGLE δ</span>
-            <span className={`font-bold ${simResult.collisionDetected ? 'text-rose-300' : 'text-amber-300'}`}>
+            <span className="text-[#68758A] block font-medium">DEFLECTION ANGLE δ</span>
+            <span className={`font-bold ${simResult.collisionDetected ? 'text-[#991B1B]' : 'text-[#B45309]'}`}>
               {simResult.collisionDetected
                 ? `UNREALIZED (${simResult.analytical.deflectionAngleDeg.toFixed(1)}° th)`
                 : `${simResult.analytical.deflectionAngleDeg.toFixed(2)}° (${simResult.analytical.deflectionAngleRad.toFixed(4)} rad)`}
             </span>
           </div>
           <div>
-            <span className="text-neutral-500 block">SUN SPEED CHANGE</span>
+            <span className="text-[#68758A] block font-medium">SUN SPEED CHANGE</span>
             {simResult.collisionDetected ? (
-              <span className="text-rose-400 font-bold" title="Unavailable due to surface collision">
+              <span className="text-[#DC2626] font-bold" title="Unavailable due to surface collision">
                 UNAVAILABLE (Impact)
               </span>
             ) : (
-              <span className={`font-bold ${simResult.analytical.deltaVSunSpeedMPerS >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <span className={`font-bold ${simResult.analytical.deltaVSunSpeedMPerS >= 0 ? 'text-[#059669]' : 'text-[#DC2626]'}`}>
                 {simResult.analytical.deltaVSunSpeedMPerS >= 0 ? '+' : ''}
                 {(simResult.analytical.deltaVSunSpeedMPerS / 1000).toFixed(3)} km/s
               </span>
             )}
           </div>
           <div>
-            <span className="text-neutral-500 block">VECTOR Δv MAGNITUDE</span>
+            <span className="text-[#68758A] block font-medium">VECTOR Δv MAGNITUDE</span>
             {simResult.collisionDetected ? (
-              <span className="text-rose-400 font-bold" title="Unavailable due to surface collision">
+              <span className="text-[#DC2626] font-bold" title="Unavailable due to surface collision">
                 UNAVAILABLE (Impact)
               </span>
             ) : (
-              <span className="text-sky-400 font-bold">
+              <span className="text-[#0284C7] font-bold">
                 {(simResult.analytical.deltaVVectorMagnitudeMPerS / 1000).toFixed(3)} km/s
               </span>
             )}
           </div>
           <div>
-            <span className="text-neutral-500 block">ENERGY DRIFT</span>
-            <span className="text-neutral-300 font-bold">
+            <span className="text-[#68758A] block font-medium">ENERGY DRIFT</span>
+            <span className="text-[#263247] font-bold">
               {simResult.collisionDetected
                 ? 'TERMINATED'
                 : simResult.convergenceDiagnostics?.relativeEnergyConservationError !== undefined

@@ -1,6 +1,6 @@
 import React from 'react';
 import { ParameterTooltip, UnitBadge } from './ParameterTooltip';
-import { Target, Zap, RotateCcw, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Target, AlertTriangle } from 'lucide-react';
 
 export interface NumericalStateControlsProps {
   customInitialState?: {
@@ -80,12 +80,12 @@ export const NumericalStateControls: React.FC<NumericalStateControlsProps> = ({
   };
 
   return (
-    <div className="bg-[#0b0c13] border border-[#1f2538] p-3.5 rounded-xs flex flex-col gap-3 font-mono text-white text-xs">
+    <div className="bg-[#F8FAFD] border border-[#DCE3EE] p-4 rounded-xl flex flex-col gap-3 font-mono text-[#263247] text-xs shadow-2xs">
       {/* Header and Toggle */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1b2132] pb-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#DCE3EE] pb-2">
         <div className="flex items-center gap-2">
-          <Target size={14} className="text-purple-400" />
-          <span className="font-bold text-purple-300 uppercase">
+          <Target size={14} className="text-[#7C3AED]" />
+          <span className="font-bold text-[#4A347F] uppercase">
             NUMERICAL INTEGRATION INITIAL STATE OVERRIDE (r₀, v₀)
           </span>
           <ParameterTooltip
@@ -95,7 +95,7 @@ export const NumericalStateControls: React.FC<NumericalStateControlsProps> = ({
           />
         </div>
 
-        <label className="flex items-center gap-1.5 cursor-pointer bg-[#141826] px-2.5 py-1 rounded-xs border border-[#273046]">
+        <label className="flex items-center gap-1.5 cursor-pointer bg-white px-2.5 py-1 rounded-lg border border-[#DCE3EE] shadow-2xs">
           <input
             type="checkbox"
             checked={state.enabled}
@@ -106,9 +106,9 @@ export const NumericalStateControls: React.FC<NumericalStateControlsProps> = ({
                 enabled: checked,
               }));
             }}
-            className="accent-purple-500 cursor-pointer"
+            className="accent-[#7C3AED] cursor-pointer"
           />
-          <span className="font-bold text-neutral-300 text-[10px]">
+          <span className="font-bold text-[#263247] text-[10px]">
             {state.enabled ? 'OVERRIDE ACTIVE' : 'ENABLE CUSTOM (r₀, v₀)'}
           </span>
         </label>
@@ -116,7 +116,7 @@ export const NumericalStateControls: React.FC<NumericalStateControlsProps> = ({
 
       {state.enabled && (
         <div className="flex flex-col gap-3">
-          <div className="text-[10px] text-neutral-400 leading-relaxed bg-[#101320] p-2 rounded-xs border border-[#1c2236]">
+          <div className="text-[10px] text-[#68758A] leading-relaxed bg-white p-2.5 rounded-lg border border-[#DCE3EE]">
             When active, numerical integration starts precisely at these 3D coordinates rather than
             generating an asymptotic hyperbolic approach from SOI. All values are in the planet-centric
             inertial frame.
@@ -124,9 +124,9 @@ export const NumericalStateControls: React.FC<NumericalStateControlsProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Position Vector [x, y, z] */}
-            <div className="flex flex-col gap-1.5 bg-[#121522] p-2.5 rounded-xs border border-[#1f263a]">
+            <div className="flex flex-col gap-1.5 bg-white p-3 rounded-lg border border-[#DCE3EE] shadow-2xs">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-neutral-400 font-bold uppercase">
+                <span className="text-[10px] text-[#68758A] font-bold uppercase">
                   INITIAL POSITION VECTOR (r₀)
                 </span>
                 <UnitBadge unit="km" />
@@ -134,7 +134,7 @@ export const NumericalStateControls: React.FC<NumericalStateControlsProps> = ({
 
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <span className="text-[9px] text-neutral-500">X (km)</span>
+                  <span className="text-[9px] text-[#68758A]">X (km)</span>
                   <input
                     type="number"
                     step="1000"
@@ -146,11 +146,11 @@ export const NumericalStateControls: React.FC<NumericalStateControlsProps> = ({
                         positionKm: { ...prev.positionKm, x: val },
                       }));
                     }}
-                    className="w-full bg-[#161a29] border border-[#28324a] px-2 py-1 rounded-xs text-white"
+                    className="w-full bg-[#F8FAFD] border border-[#DCE3EE] px-2 py-1 rounded-md text-[#263247]"
                   />
                 </div>
                 <div>
-                  <span className="text-[9px] text-neutral-500">Y (km)</span>
+                  <span className="text-[9px] text-[#68758A]">Y (km)</span>
                   <input
                     type="number"
                     step="1000"
@@ -162,11 +162,11 @@ export const NumericalStateControls: React.FC<NumericalStateControlsProps> = ({
                         positionKm: { ...prev.positionKm, y: val },
                       }));
                     }}
-                    className="w-full bg-[#161a29] border border-[#28324a] px-2 py-1 rounded-xs text-white"
+                    className="w-full bg-[#F8FAFD] border border-[#DCE3EE] px-2 py-1 rounded-md text-[#263247]"
                   />
                 </div>
                 <div>
-                  <span className="text-[9px] text-neutral-500">Z (km)</span>
+                  <span className="text-[9px] text-[#68758A]">Z (km)</span>
                   <input
                     type="number"
                     step="1000"
@@ -178,23 +178,23 @@ export const NumericalStateControls: React.FC<NumericalStateControlsProps> = ({
                         positionKm: { ...prev.positionKm, z: val },
                       }));
                     }}
-                    className="w-full bg-[#161a29] border border-[#28324a] px-2 py-1 rounded-xs text-white"
+                    className="w-full bg-[#F8FAFD] border border-[#DCE3EE] px-2 py-1 rounded-md text-[#263247]"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-between text-[9px] text-neutral-400 pt-1">
+              <div className="flex justify-between text-[9px] text-[#68758A] pt-1">
                 <span>||r₀||: {currentRadiusKm.toLocaleString(undefined, { maximumFractionDigits: 0 })} km</span>
-                <span className={isInsidePlanet ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
+                <span className={isInsidePlanet ? 'text-[#DC2626] font-bold' : 'text-[#059669]'}>
                   {isInsidePlanet ? 'INSIDE PLANET (Collision)' : 'OUTSIDE SURFACE'}
                 </span>
               </div>
             </div>
 
             {/* Velocity Vector [vx, vy, vz] */}
-            <div className="flex flex-col gap-1.5 bg-[#121522] p-2.5 rounded-xs border border-[#1f263a]">
+            <div className="flex flex-col gap-1.5 bg-white p-3 rounded-lg border border-[#DCE3EE] shadow-2xs">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-neutral-400 font-bold uppercase">
+                <span className="text-[10px] text-[#68758A] font-bold uppercase">
                   INITIAL VELOCITY VECTOR (v₀)
                 </span>
                 <UnitBadge unit="km/s" />
@@ -202,7 +202,7 @@ export const NumericalStateControls: React.FC<NumericalStateControlsProps> = ({
 
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <span className="text-[9px] text-neutral-500">Vx (km/s)</span>
+                  <span className="text-[9px] text-[#68758A]">Vx (km/s)</span>
                   <input
                     type="number"
                     step="0.5"
@@ -214,11 +214,11 @@ export const NumericalStateControls: React.FC<NumericalStateControlsProps> = ({
                         velocityKmPerS: { ...prev.velocityKmPerS, x: val },
                       }));
                     }}
-                    className="w-full bg-[#161a29] border border-[#28324a] px-2 py-1 rounded-xs text-amber-300 font-bold"
+                    className="w-full bg-[#F8FAFD] border border-[#DCE3EE] px-2 py-1 rounded-md text-[#B45309] font-bold"
                   />
                 </div>
                 <div>
-                  <span className="text-[9px] text-neutral-500">Vy (km/s)</span>
+                  <span className="text-[9px] text-[#68758A]">Vy (km/s)</span>
                   <input
                     type="number"
                     step="0.5"
@@ -230,11 +230,11 @@ export const NumericalStateControls: React.FC<NumericalStateControlsProps> = ({
                         velocityKmPerS: { ...prev.velocityKmPerS, y: val },
                       }));
                     }}
-                    className="w-full bg-[#161a29] border border-[#28324a] px-2 py-1 rounded-xs text-amber-300 font-bold"
+                    className="w-full bg-[#F8FAFD] border border-[#DCE3EE] px-2 py-1 rounded-md text-[#B45309] font-bold"
                   />
                 </div>
                 <div>
-                  <span className="text-[9px] text-neutral-500">Vz (km/s)</span>
+                  <span className="text-[9px] text-[#68758A]">Vz (km/s)</span>
                   <input
                     type="number"
                     step="0.5"
@@ -246,33 +246,33 @@ export const NumericalStateControls: React.FC<NumericalStateControlsProps> = ({
                         velocityKmPerS: { ...prev.velocityKmPerS, z: val },
                       }));
                     }}
-                    className="w-full bg-[#161a29] border border-[#28324a] px-2 py-1 rounded-xs text-amber-300 font-bold"
+                    className="w-full bg-[#F8FAFD] border border-[#DCE3EE] px-2 py-1 rounded-md text-[#B45309] font-bold"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-between text-[9px] text-neutral-400 pt-1">
+              <div className="flex justify-between text-[9px] text-[#68758A] pt-1">
                 <span>Speed ||v₀||: {currentSpeedKmPerS.toFixed(2)} km/s</span>
-                <span className="text-sky-400">{(currentSpeedKmPerS * 1000).toLocaleString()} m/s</span>
+                <span className="text-[#0284C7]">{(currentSpeedKmPerS * 1000).toLocaleString()} m/s</span>
               </div>
             </div>
           </div>
 
           {/* Preset Buttons */}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#1a1f2e] pt-2">
-            <span className="text-[10px] text-neutral-500">QUICK VECTOR PRESETS:</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#DCE3EE] pt-2">
+            <span className="text-[10px] text-[#68758A]">QUICK VECTOR PRESETS:</span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleSetAsymptoticState}
-                className="px-2 py-1 bg-[#161a29] hover:bg-[#20273d] text-neutral-200 border border-[#273046] rounded-xs text-[10px] cursor-pointer"
+                className="px-2.5 py-1 bg-white hover:bg-[#EEF2F8] text-[#263247] border border-[#DCE3EE] rounded-lg text-[10px] cursor-pointer shadow-2xs font-medium"
               >
                 Inflow at Ingress
               </button>
               <button
                 type="button"
                 onClick={handleSetPeriapsisState}
-                className="px-2 py-1 bg-[#161a29] hover:bg-[#20273d] text-neutral-200 border border-[#273046] rounded-xs text-[10px] cursor-pointer"
+                className="px-2.5 py-1 bg-white hover:bg-[#EEF2F8] text-[#263247] border border-[#DCE3EE] rounded-lg text-[10px] cursor-pointer shadow-2xs font-medium"
               >
                 Periapsis Point (r_p, v_p)
               </button>
@@ -280,8 +280,8 @@ export const NumericalStateControls: React.FC<NumericalStateControlsProps> = ({
           </div>
 
           {isInsidePlanet && (
-            <div className="p-2 bg-rose-950/70 border border-rose-600/70 rounded-xs flex items-center gap-2 text-rose-200 text-[11px]">
-              <AlertTriangle size={14} className="text-rose-400 flex-shrink-0" />
+            <div className="p-2.5 bg-[#FEE2E2] border border-[#FCA5A5] rounded-xl flex items-center gap-2 text-[#991B1B] text-[11px]">
+              <AlertTriangle size={14} className="text-[#DC2626] flex-shrink-0" />
               <span>
                 Warning: Initial position magnitude ({currentRadiusKm.toFixed(0)} km) is inside the planet's
                 physical surface radius ({planetRadiusKm.toLocaleString()} km).

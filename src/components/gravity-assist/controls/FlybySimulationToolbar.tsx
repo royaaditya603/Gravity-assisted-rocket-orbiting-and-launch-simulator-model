@@ -7,16 +7,10 @@ import {
   SkipBack,
   Compass,
   Sliders,
-  Eye,
-  Crosshair,
-  Grid,
-  Zap,
-  Layers,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
 import { FlybyCameraMode } from '../viewport/Flyby3DCanvas';
-import { ReferenceFrame } from '../../../physics/FlybyEngine';
 
 export type ViewFrameMode = 'PLANET_CENTRIC' | 'HELIOCENTRIC' | 'SIDE_BY_SIDE';
 
@@ -80,7 +74,6 @@ export const FlybySimulationToolbar: React.FC<FlybySimulationToolbarProps> = ({
   onChangeViewFrameMode,
   cameraMode,
   onChangeCameraMode,
-  onResetCamera,
   showVectors,
   onToggleVectors,
   showTrajectoryTrail,
@@ -88,7 +81,6 @@ export const FlybySimulationToolbar: React.FC<FlybySimulationToolbarProps> = ({
   isParamsCollapsed,
   onToggleParamsCollapse,
 }) => {
-  const progressPercent = totalDurationS > 0 ? (currentTimeS / totalDurationS) * 100 : 0;
   const periapsisPercent =
     totalDurationS > 0 && periapsisTimeS !== undefined ? (periapsisTimeS / totalDurationS) * 100 : null;
   const collisionPercent =
@@ -103,19 +95,19 @@ export const FlybySimulationToolbar: React.FC<FlybySimulationToolbarProps> = ({
   };
 
   return (
-    <div className="w-full bg-[#0c0e16] border border-[#1f2538] p-3 rounded-xs flex flex-col gap-3 text-white font-mono shadow-md select-none">
+    <div className="w-full bg-white border border-[#DCE3EE] p-3.5 rounded-xl flex flex-col gap-3 text-[#263247] font-mono shadow-xs select-none">
       {/* Top Bar: Playback Controls + Speed + Reference Frame Mode + Camera + Param Panel Toggle */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#1b2132] pb-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#DCE3EE] pb-2.5">
         {/* Left: Playback & Step Controls */}
         <div className="flex items-center gap-2">
           {/* Play/Pause */}
           <button
             onClick={onTogglePlay}
             title={isPlaying ? 'Pause Simulation' : 'Resume Simulation'}
-            className={`px-3 py-1.5 rounded-xs flex items-center gap-1.5 text-xs font-bold transition-all shadow-sm ${
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all shadow-xs cursor-pointer ${
               isPlaying
-                ? 'bg-amber-500 hover:bg-amber-400 text-black'
-                : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                ? 'bg-[#FFD2B8] hover:bg-[#ffc5a3] text-[#7A3E1D] border border-[#FFD2B8]'
+                : 'bg-[#AEE5D0] hover:bg-[#97dbc1] text-[#1D6C50] border border-[#AEE5D0]'
             }`}
           >
             {isPlaying ? <Pause size={14} /> : <Play size={14} />}
@@ -126,7 +118,7 @@ export const FlybySimulationToolbar: React.FC<FlybySimulationToolbarProps> = ({
           <button
             onClick={handleStepBack}
             title="Step Backward One Numerical Step"
-            className="p-1.5 bg-[#141824] hover:bg-[#20273a] text-neutral-300 hover:text-white rounded-xs border border-[#27324d] transition-colors"
+            className="p-1.5 bg-[#EEF2F8] hover:bg-[#E2E8F0] text-[#263247] rounded-lg border border-[#DCE3EE] transition-colors cursor-pointer"
           >
             <SkipBack size={14} />
           </button>
@@ -135,7 +127,7 @@ export const FlybySimulationToolbar: React.FC<FlybySimulationToolbarProps> = ({
           <button
             onClick={onStep}
             title="Step Forward One Numerical Step"
-            className="p-1.5 bg-[#141824] hover:bg-[#20273a] text-neutral-300 hover:text-white rounded-xs border border-[#27324d] transition-colors"
+            className="p-1.5 bg-[#EEF2F8] hover:bg-[#E2E8F0] text-[#263247] rounded-lg border border-[#DCE3EE] transition-colors cursor-pointer"
           >
             <SkipForward size={14} />
           </button>
@@ -144,21 +136,21 @@ export const FlybySimulationToolbar: React.FC<FlybySimulationToolbarProps> = ({
           <button
             onClick={onReset}
             title="Reset Simulation to T=0"
-            className="p-1.5 bg-[#141824] hover:bg-[#20273a] text-neutral-300 hover:text-white rounded-xs border border-[#27324d] transition-colors"
+            className="p-1.5 bg-[#EEF2F8] hover:bg-[#E2E8F0] text-[#263247] rounded-lg border border-[#DCE3EE] transition-colors cursor-pointer"
           >
             <RotateCcw size={14} />
           </button>
 
           {/* Playback Speed Selector */}
-          <div className="flex items-center gap-1 bg-[#090b12] p-0.5 rounded-xs border border-[#1e2538] text-[10px]">
+          <div className="flex items-center gap-0.5 bg-[#EEF2F8] p-0.5 rounded-lg border border-[#DCE3EE] text-[10px]">
             {PLAYBACK_SPEEDS.map((spd) => (
               <button
                 key={spd}
                 onClick={() => onChangePlaybackSpeed(spd)}
-                className={`px-1.5 py-0.5 rounded-xs transition-colors ${
+                className={`px-1.5 py-0.5 rounded-md transition-colors cursor-pointer ${
                   playbackSpeed === spd
-                    ? 'bg-sky-500 text-black font-bold'
-                    : 'text-neutral-400 hover:text-white'
+                    ? 'bg-[#A9D4F5] text-[#14426B] font-bold shadow-2xs'
+                    : 'text-[#68758A] hover:text-[#263247]'
                 }`}
               >
                 {spd}x
@@ -168,36 +160,36 @@ export const FlybySimulationToolbar: React.FC<FlybySimulationToolbarProps> = ({
         </div>
 
         {/* Center: Reference Frame Mode Selector */}
-        <div className="flex items-center gap-1 bg-[#090b12] p-1 rounded-xs border border-[#1e2538] text-[11px]">
-          <span className="text-[10px] text-neutral-400 px-1.5 flex items-center gap-1">
-            <Compass size={12} className="text-amber-400" /> FRAME:
+        <div className="flex items-center gap-1 bg-[#EEF2F8] p-1 rounded-lg border border-[#DCE3EE] text-[11px]">
+          <span className="text-[10px] text-[#68758A] px-1.5 flex items-center gap-1">
+            <Compass size={12} className="text-[#B45309]" /> FRAME:
           </span>
           <button
             onClick={() => onChangeViewFrameMode('PLANET_CENTRIC')}
-            className={`px-2.5 py-1 rounded-xs font-bold transition-colors ${
+            className={`px-2.5 py-1 rounded-md font-bold transition-colors cursor-pointer ${
               viewFrameMode === 'PLANET_CENTRIC'
-                ? 'bg-amber-500 text-black shadow-sm'
-                : 'text-neutral-400 hover:text-white'
+                ? 'bg-[#FFD2B8] text-[#7A3E1D] shadow-2xs'
+                : 'text-[#68758A] hover:text-[#263247]'
             }`}
           >
             PLANET-RELATIVE
           </button>
           <button
             onClick={() => onChangeViewFrameMode('HELIOCENTRIC')}
-            className={`px-2.5 py-1 rounded-xs font-bold transition-colors ${
+            className={`px-2.5 py-1 rounded-md font-bold transition-colors cursor-pointer ${
               viewFrameMode === 'HELIOCENTRIC'
-                ? 'bg-sky-500 text-black shadow-sm'
-                : 'text-neutral-400 hover:text-white'
+                ? 'bg-[#A9D4F5] text-[#14426B] shadow-2xs'
+                : 'text-[#68758A] hover:text-[#263247]'
             }`}
           >
             SUN-RELATIVE
           </button>
           <button
             onClick={() => onChangeViewFrameMode('SIDE_BY_SIDE')}
-            className={`px-2.5 py-1 rounded-xs font-bold transition-colors flex items-center gap-1 ${
+            className={`px-2.5 py-1 rounded-md font-bold transition-colors flex items-center gap-1 cursor-pointer ${
               viewFrameMode === 'SIDE_BY_SIDE'
-                ? 'bg-emerald-500 text-black shadow-sm'
-                : 'text-neutral-400 hover:text-white'
+                ? 'bg-[#AEE5D0] text-[#1D6C50] shadow-2xs'
+                : 'text-[#68758A] hover:text-[#263247]'
             }`}
           >
             <span>◫</span> SIDE-BY-SIDE
@@ -207,34 +199,34 @@ export const FlybySimulationToolbar: React.FC<FlybySimulationToolbarProps> = ({
         {/* Right: Camera Mode & Parameter Panel Toggle */}
         <div className="flex items-center gap-2">
           {/* Camera Preset Selector */}
-          <div className="flex items-center gap-1 bg-[#090b12] p-0.5 rounded-xs border border-[#1e2538] text-[10px]">
-            <span className="text-[9px] text-neutral-400 px-1">CAM:</span>
+          <div className="flex items-center gap-0.5 bg-[#EEF2F8] p-0.5 rounded-lg border border-[#DCE3EE] text-[10px]">
+            <span className="text-[9px] text-[#68758A] px-1">CAM:</span>
             <button
               onClick={() => onChangeCameraMode('OVERVIEW')}
-              className={`px-2 py-0.5 rounded-xs transition-colors ${
+              className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
                 cameraMode === 'OVERVIEW'
-                  ? 'bg-neutral-200 text-black font-bold'
-                  : 'text-neutral-400 hover:text-white'
+                  ? 'bg-white text-[#263247] font-bold shadow-2xs'
+                  : 'text-[#68758A] hover:text-[#263247]'
               }`}
             >
               OVERVIEW
             </button>
             <button
               onClick={() => onChangeCameraMode('CLOSE_UP')}
-              className={`px-2 py-0.5 rounded-xs transition-colors ${
+              className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
                 cameraMode === 'CLOSE_UP'
-                  ? 'bg-neutral-200 text-black font-bold'
-                  : 'text-neutral-400 hover:text-white'
+                  ? 'bg-white text-[#263247] font-bold shadow-2xs'
+                  : 'text-[#68758A] hover:text-[#263247]'
               }`}
             >
               CLOSE-UP
             </button>
             <button
               onClick={() => onChangeCameraMode('PROBE_FOLLOW')}
-              className={`px-2 py-0.5 rounded-xs transition-colors ${
+              className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
                 cameraMode === 'PROBE_FOLLOW'
-                  ? 'bg-sky-500 text-black font-bold'
-                  : 'text-neutral-400 hover:text-white'
+                  ? 'bg-[#C9BDF2] text-[#4A347F] font-bold shadow-2xs'
+                  : 'text-[#68758A] hover:text-[#263247]'
               }`}
             >
               FOLLOW
@@ -245,10 +237,10 @@ export const FlybySimulationToolbar: React.FC<FlybySimulationToolbarProps> = ({
           <button
             onClick={onToggleVectors}
             title="Toggle Velocity & Acceleration Vectors"
-            className={`px-2 py-1 text-[10px] rounded-xs border transition-colors ${
+            className={`px-2.5 py-1 text-[10px] rounded-lg border transition-colors cursor-pointer font-medium ${
               showVectors
-                ? 'bg-emerald-950/80 border-emerald-600 text-emerald-300'
-                : 'bg-[#141824] border-[#27324d] text-neutral-400 hover:text-white'
+                ? 'bg-[#AEE5D0]/35 border-[#AEE5D0] text-[#1D6C50]'
+                : 'bg-[#EEF2F8] border-[#DCE3EE] text-[#68758A] hover:text-[#263247]'
             }`}
           >
             VECTORS
@@ -258,10 +250,10 @@ export const FlybySimulationToolbar: React.FC<FlybySimulationToolbarProps> = ({
           <button
             onClick={onToggleTrajectoryTrail}
             title="Toggle Trajectory Trail Lines"
-            className={`px-2 py-1 text-[10px] rounded-xs border transition-colors ${
+            className={`px-2.5 py-1 text-[10px] rounded-lg border transition-colors cursor-pointer font-medium ${
               showTrajectoryTrail
-                ? 'bg-sky-950/80 border-sky-600 text-sky-300'
-                : 'bg-[#141824] border-[#27324d] text-neutral-400 hover:text-white'
+                ? 'bg-[#A9D4F5]/35 border-[#A9D4F5] text-[#14426B]'
+                : 'bg-[#EEF2F8] border-[#DCE3EE] text-[#68758A] hover:text-[#263247]'
             }`}
           >
             TRAILS
@@ -271,9 +263,9 @@ export const FlybySimulationToolbar: React.FC<FlybySimulationToolbarProps> = ({
           <button
             onClick={onToggleParamsCollapse}
             title="Toggle Parameter Panel"
-            className="px-2.5 py-1 bg-[#161c2b] hover:bg-[#20273a] text-neutral-200 border border-[#27334f] rounded-xs text-[10px] font-bold flex items-center gap-1 transition-colors"
+            className="px-2.5 py-1 bg-[#EEF2F8] hover:bg-[#E2E8F0] text-[#263247] border border-[#DCE3EE] rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
           >
-            <Sliders size={12} className="text-amber-400" />
+            <Sliders size={12} className="text-[#B45309]" />
             <span>PARAMETERS</span>
             {isParamsCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
           </button>
@@ -282,25 +274,25 @@ export const FlybySimulationToolbar: React.FC<FlybySimulationToolbarProps> = ({
 
       {/* Bottom Bar: Timeline Scrubber with Event Milestones */}
       <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between text-[11px] text-neutral-300">
+        <div className="flex items-center justify-between text-[11px] text-[#263247]">
           <div className="flex items-center gap-2">
-            <span className="text-amber-400 font-bold">
+            <span className="text-[#B45309] font-bold">
               T + {currentTimeS.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s
             </span>
-            <span className="text-neutral-500">/</span>
-            <span className="text-neutral-400">
+            <span className="text-[#94A3B8]">/</span>
+            <span className="text-[#68758A]">
               {totalDurationS.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s
             </span>
             {collisionDetected && (
-              <span className="text-rose-400 font-bold bg-rose-950/80 px-1.5 py-0.2 rounded-xs border border-rose-700 text-[10px]">
+              <span className="text-[#991B1B] font-bold bg-[#FEE2E2] px-2 py-0.5 rounded-md border border-[#FCA5A5] text-[10px]">
                 IMPACT AT T + {collisionTimeS?.toFixed(1)}s
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-3 text-[10px] text-neutral-400">
+          <div className="flex items-center gap-3 text-[10px] text-[#68758A]">
             {periapsisTimeS !== undefined && (
-              <span className="text-emerald-400">
+              <span className="text-[#059669] font-semibold">
                 PERIAPSIS: T + {periapsisTimeS.toFixed(1)}s
               </span>
             )}
@@ -316,13 +308,13 @@ export const FlybySimulationToolbar: React.FC<FlybySimulationToolbarProps> = ({
             max={Math.max(1, totalSteps - 1)}
             value={currentStepIndex}
             onChange={(e) => onSeek(Number(e.target.value))}
-            className="w-full h-2 bg-[#171b28] rounded-xs appearance-none cursor-pointer accent-sky-400"
+            className="w-full h-2 bg-[#EEF2F8] rounded-md appearance-none cursor-pointer accent-[#0284C7]"
           />
 
           {/* Periapsis Milestone Tick */}
           {periapsisPercent !== null && periapsisPercent >= 0 && periapsisPercent <= 100 && (
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-1.5 h-3 bg-emerald-400 rounded-full pointer-events-none opacity-80"
+              className="absolute top-1/2 -translate-y-1/2 w-1.5 h-3 bg-[#059669] rounded-full pointer-events-none opacity-85"
               style={{ left: `${periapsisPercent}%` }}
               title={`Closest Approach (T + ${periapsisTimeS?.toFixed(1)}s)`}
             />
@@ -331,7 +323,7 @@ export const FlybySimulationToolbar: React.FC<FlybySimulationToolbarProps> = ({
           {/* Collision Milestone Tick */}
           {collisionPercent !== null && collisionPercent >= 0 && collisionPercent <= 100 && (
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-2 h-3.5 bg-rose-500 rounded-full pointer-events-none animate-pulse"
+              className="absolute top-1/2 -translate-y-1/2 w-2 h-3.5 bg-[#EF4444] rounded-full pointer-events-none animate-pulse"
               style={{ left: `${collisionPercent}%` }}
               title={`Collision Impact (T + ${collisionTimeS?.toFixed(1)}s)`}
             />

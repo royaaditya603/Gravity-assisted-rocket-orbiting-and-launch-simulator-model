@@ -479,22 +479,22 @@ export const FlybyExperiments: React.FC<FlybyExperimentsProps> = ({ onLoadPreset
   };
 
   return (
-    <div className="w-full bg-[#10121a] border border-[#222638] p-5 rounded-xs flex flex-col gap-5 text-white">
+    <div className="w-full bg-white border border-[#DCE3EE] p-5 rounded-xl flex flex-col gap-5 text-[#263247] shadow-xs">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#222638] pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#DCE3EE] pb-3">
         <div className="flex items-center gap-2">
-          <FlaskConical size={18} className="text-amber-400" />
-          <span className="font-mono text-xs font-bold uppercase tracking-wider text-neutral-200">
+          <FlaskConical size={18} className="text-[#059669]" />
+          <span className="font-mono text-xs font-bold uppercase tracking-wider text-[#14426B]">
             ASTRA SCIENTIFIC EXPERIMENT & ANALYSIS DASHBOARD
           </span>
         </div>
-        <div className="flex items-center gap-2 text-[10px] font-mono text-neutral-400">
-          <span className="bg-[#1b1f2e] px-2 py-0.5 rounded-xs border border-[#2d344d] text-amber-300">
+        <div className="flex items-center gap-2 text-[10px] font-mono text-[#68758A]">
+          <span className="bg-[#EEF2F8] px-2.5 py-1 rounded-md border border-[#DCE3EE] text-[#1D6C50] font-semibold">
             PHASE 4: EXPERIMENTATION & VERIFICATION
           </span>
           <button
             onClick={() => setShowSavedDrawer((prev) => !prev)}
-            className="flex items-center gap-1 px-2.5 py-1 bg-[#1a1e2d] hover:bg-[#252b40] text-sky-400 rounded-xs border border-sky-800/40 transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1 bg-[#EEF2F8] hover:bg-[#E2E8F0] text-[#0284C7] rounded-lg border border-[#DCE3EE] transition-colors cursor-pointer"
           >
             <BookmarkPlus size={11} />
             SAVED EXPERIMENTS ({savedExperiments.length})
@@ -519,10 +519,10 @@ export const FlybyExperiments: React.FC<FlybyExperimentsProps> = ({ onLoadPreset
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as TabId)}
-            className={`py-2 px-1 rounded-xs border text-center transition-colors truncate ${
+            className={`py-2 px-1 rounded-lg border text-center transition-colors truncate font-semibold cursor-pointer ${
               activeTab === tab.id
-                ? 'bg-amber-500 text-black font-bold border-amber-400 shadow-sm'
-                : 'bg-[#161824] text-neutral-400 border-[#252a3d] hover:text-white'
+                ? 'bg-[#AEE5D0] text-[#1D6C50] font-bold border-[#AEE5D0] shadow-2xs'
+                : 'bg-[#F8FAFD] text-[#68758A] border-[#DCE3EE] hover:text-[#263247] hover:bg-[#EEF2F8]'
             }`}
           >
             {tab.label}

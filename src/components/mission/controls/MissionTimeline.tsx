@@ -92,38 +92,38 @@ export const MissionTimeline: React.FC<MissionTimelineProps> = ({
   };
 
   return (
-    <div className="w-full bg-[#0d0f17] border border-[#222538] p-4 rounded-xs text-white font-mono flex flex-col gap-3">
+    <div className="w-full bg-white border border-[#DCE3EE] p-4 rounded-xl text-[#263247] font-mono flex flex-col gap-3 shadow-xs">
       {/* Top Row: Mission Clocks & Epoch Telemetry */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#1f2436] pb-3 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#DCE3EE] pb-3 text-xs">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5 text-neutral-300">
-            <Clock size={15} className="text-cyan-400" />
-            <span className="text-neutral-500">MET:</span>
-            <span className="text-white font-bold text-sm">
-              T+{currentTimeDays.toFixed(1)} <span className="text-neutral-400 text-xs">DAYS</span>
+          <div className="flex items-center gap-1.5 text-[#263247]">
+            <Clock size={15} className="text-[#0284C7]" />
+            <span className="text-[#68758A]">MET:</span>
+            <span className="text-[#263247] font-bold text-sm">
+              T+{currentTimeDays.toFixed(1)} <span className="text-[#68758A] text-xs">DAYS</span>
             </span>
-            <span className="text-neutral-500">({(currentTimeDays / 365.25).toFixed(2)} YRS)</span>
+            <span className="text-[#94A3B8]">({(currentTimeDays / 365.25).toFixed(2)} YRS)</span>
           </div>
 
-          <div className="hidden sm:flex items-center gap-1.5 text-neutral-300">
-            <Calendar size={14} className="text-amber-400" />
-            <span className="text-neutral-500">EPOCH:</span>
-            <span className="text-amber-300 font-bold">{currentUTC}</span>
-            <span className="text-neutral-500">(JD {currentJD})</span>
+          <div className="hidden sm:flex items-center gap-1.5 text-[#263247]">
+            <Calendar size={14} className="text-[#B45309]" />
+            <span className="text-[#68758A]">EPOCH:</span>
+            <span className="text-[#B45309] font-bold">{currentUTC}</span>
+            <span className="text-[#94A3B8]">(JD {currentJD})</span>
           </div>
         </div>
 
         {/* Playback Controls & Time Warp Multipliers */}
         <div className="flex items-center gap-2">
-          <div className="flex items-center bg-[#151926] border border-[#2b334d] rounded-xs p-0.5">
+          <div className="flex items-center bg-[#EEF2F8] border border-[#DCE3EE] rounded-lg p-0.5">
             {[1, 10, 50, 200].map((warp) => (
               <button
                 key={warp}
                 onClick={() => onChangePlaybackWarp(warp)}
-                className={`px-2 py-0.5 text-[10px] rounded-xs transition-colors ${
+                className={`px-2 py-0.5 text-[10px] rounded-md transition-colors cursor-pointer ${
                   playbackWarp === warp
-                    ? 'bg-cyan-500 text-black font-bold'
-                    : 'text-neutral-400 hover:text-white'
+                    ? 'bg-[#A9D4F5] text-[#14426B] font-bold shadow-2xs'
+                    : 'text-[#68758A] hover:text-[#263247]'
                 }`}
               >
                 {warp}x
@@ -133,7 +133,7 @@ export const MissionTimeline: React.FC<MissionTimelineProps> = ({
 
           <button
             onClick={handleStepBack}
-            className="p-1.5 rounded-xs bg-[#161a29] text-neutral-400 hover:text-white border border-[#273047]"
+            className="p-1.5 rounded-lg bg-white text-[#263247] hover:bg-[#EEF2F8] border border-[#DCE3EE] shadow-2xs cursor-pointer"
             title="Step Back -15 Days"
           >
             <SkipBack size={13} />
@@ -141,10 +141,10 @@ export const MissionTimeline: React.FC<MissionTimelineProps> = ({
 
           <button
             onClick={onTogglePlay}
-            className={`flex items-center gap-1 px-3 py-1 rounded-xs border text-xs font-bold transition-colors ${
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors cursor-pointer shadow-2xs ${
               isPlaying
-                ? 'bg-amber-500 border-amber-400 text-black'
-                : 'bg-cyan-500 border-cyan-400 text-black'
+                ? 'bg-[#FFD2B8] hover:bg-[#ffc5a3] text-[#7A3E1D] border-[#FFD2B8]'
+                : 'bg-[#AEE5D0] hover:bg-[#97dbc1] text-[#1D6C50] border-[#AEE5D0]'
             }`}
           >
             {isPlaying ? <Pause size={13} /> : <Play size={13} />}
@@ -153,7 +153,7 @@ export const MissionTimeline: React.FC<MissionTimelineProps> = ({
 
           <button
             onClick={handleStepForward}
-            className="p-1.5 rounded-xs bg-[#161a29] text-neutral-400 hover:text-white border border-[#273047]"
+            className="p-1.5 rounded-lg bg-white text-[#263247] hover:bg-[#EEF2F8] border border-[#DCE3EE] shadow-2xs cursor-pointer"
             title="Step Forward +15 Days"
           >
             <SkipForward size={13} />
@@ -161,7 +161,7 @@ export const MissionTimeline: React.FC<MissionTimelineProps> = ({
 
           <button
             onClick={onReset}
-            className="p-1.5 rounded-xs bg-[#161a29] text-neutral-400 hover:text-white border border-[#273047]"
+            className="p-1.5 rounded-lg bg-white text-[#263247] hover:bg-[#EEF2F8] border border-[#DCE3EE] shadow-2xs cursor-pointer"
             title="Reset to T=0"
           >
             <RotateCcw size={13} />
@@ -176,7 +176,7 @@ export const MissionTimeline: React.FC<MissionTimelineProps> = ({
           {/* Departure Pin */}
           <button
             onClick={() => onTimeChange(0)}
-            className="absolute top-0 text-[10px] text-sky-400 hover:underline -translate-x-1/2"
+            className="absolute top-0 text-[10px] text-[#0284C7] hover:underline -translate-x-1/2 font-bold cursor-pointer"
             style={{ left: '0%' }}
           >
             ▲ LAUNCH
@@ -194,7 +194,7 @@ export const MissionTimeline: React.FC<MissionTimelineProps> = ({
               <button
                 key={enc.encounterId}
                 onClick={() => onTimeChange(encDays)}
-                className="absolute top-0 text-[10px] text-amber-400 hover:text-amber-200 transition-colors -translate-x-1/2 flex flex-col items-center"
+                className="absolute top-0 text-[10px] text-[#B45309] hover:underline transition-colors -translate-x-1/2 flex flex-col items-center font-bold cursor-pointer"
                 style={{ left: `${pct}%` }}
                 title={`Seek to ${enc.planetName} Encounter`}
               >
@@ -212,11 +212,11 @@ export const MissionTimeline: React.FC<MissionTimelineProps> = ({
           step={1}
           value={currentTimeDays}
           onChange={(e) => onTimeChange(parseFloat(e.target.value))}
-          className="w-full h-2 bg-[#181d2c] rounded-xs appearance-none cursor-pointer accent-cyan-400"
+          className="w-full h-2 bg-[#EEF2F8] rounded-md appearance-none cursor-pointer accent-[#0284C7]"
         />
 
         {/* Progress Labels */}
-        <div className="flex justify-between items-center text-[10px] text-neutral-500 mt-1">
+        <div className="flex justify-between items-center text-[10px] text-[#68758A] mt-1 font-medium">
           <span>T+0.0 D</span>
           <span>{((currentTimeDays / maxDays) * 100).toFixed(0)}% MISSION PROGRESS</span>
           <span>T+{maxDays.toFixed(0)} D</span>

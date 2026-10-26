@@ -68,27 +68,27 @@ export const PhysicsExplainer: React.FC<PhysicsExplainerProps> = ({ sim }) => {
     <div className="absolute bottom-20 left-4 z-20 pointer-events-auto max-w-sm">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#0e1017]/85 backdrop-blur-md border border-[#232733] hover:border-neutral-500 rounded-xs text-[11px] font-mono text-neutral-300 transition-colors shadow-lg"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/95 backdrop-blur-md border border-[#DCE3EE] hover:border-[#89C2EE] rounded-lg text-[11px] font-mono text-[#263247] transition-colors shadow-lg"
       >
-        <BookOpen size={13} className="text-sky-400" />
+        <BookOpen size={13} className="text-[#14426B]" />
         <span>PHYSICS EXPLAINER</span>
-        <ChevronRight size={13} className={`transform transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+        <ChevronRight size={13} className={`transform transition-transform text-[#68758A] ${isOpen ? 'rotate-90' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="mt-2 bg-[#0e1017]/95 backdrop-blur-md border border-[#232733] p-3.5 rounded-sm shadow-2xl flex flex-col gap-2 text-xs">
-          <div className="flex items-center gap-2 border-b border-[#232733] pb-1.5">
-            <Info size={14} className="text-sky-400 shrink-0" />
-            <span className="font-mono font-bold text-white uppercase text-[11px]">
+        <div className="mt-2 bg-white/95 backdrop-blur-md border border-[#DCE3EE] p-3.5 rounded-xl shadow-2xl flex flex-col gap-2 text-xs text-[#263247]">
+          <div className="flex items-center gap-2 border-b border-[#DCE3EE] pb-1.5">
+            <Info size={14} className="text-[#14426B] shrink-0" />
+            <span className="font-mono font-bold text-[#263247] uppercase text-[11px]">
               {current.title}
             </span>
           </div>
 
-          <div className="bg-[#141720] p-2 rounded-xs border border-[#1f2433] font-mono text-[10px] text-amber-300">
+          <div className="bg-[#F8FAFD] p-2 rounded-lg border border-[#DCE3EE] font-mono text-[10px] text-[#7A3E1D] font-bold">
             {current.equation}
           </div>
 
-          <p className="text-neutral-300 leading-relaxed text-[11px]">
+          <p className="text-[#475569] leading-relaxed text-[11px]">
             {current.text}
           </p>
         </div>

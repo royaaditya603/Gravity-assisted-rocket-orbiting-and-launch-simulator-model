@@ -46,55 +46,55 @@ export const NarrativeSection: React.FC = () => {
   ];
 
   return (
-    <section id="narrative" className="w-full bg-[#f5f5f2] border-b border-[#d8d7d2] py-20 px-4 sm:px-8">
+    <section id="narrative" className="w-full bg-[#F5F7FB] border-b border-[#DCE3EE] py-20 px-4 sm:px-8">
       <div className="max-w-7xl mx-auto flex flex-col gap-16">
         {/* Section Header */}
         <div className="flex flex-col gap-3 max-w-3xl">
-          <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#686a73]">
+          <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#68758A] font-bold">
             [ THE SCIENTIFIC NARRATIVE ]
           </span>
-          <h2 className="text-4xl sm:text-6xl font-sans font-black tracking-[-0.03em] uppercase text-[#111215]">
+          <h2 className="text-4xl sm:text-6xl font-sans font-black tracking-[-0.03em] uppercase text-[#263247]">
             THE LAWS OF FLIGHT & ORBITAL MECHANICS
           </h2>
-          <p className="text-base text-[#444650] leading-relaxed font-normal">
+          <p className="text-base text-[#475569] leading-relaxed font-normal">
             Every trajectory in this simulator is computed from first principles. Here is the formal mathematics governing
             each phase from liftoff to interplanetary trajectory reshaping.
           </p>
         </div>
 
         {/* Chapters Stack */}
-        <div className="flex flex-col divide-y divide-[#d8d7d2] border-t border-b border-[#d8d7d2]">
+        <div className="flex flex-col divide-y divide-[#DCE3EE] border-t border-b border-[#DCE3EE]">
           {chapters.map((ch) => (
             <div key={ch.num} className="py-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               {/* Left Column: Number & Metadata */}
               <div className="lg:col-span-3 flex flex-col gap-1">
-                <span className="text-5xl sm:text-6xl font-sans font-black tracking-tighter text-[#111215]">
+                <span className="text-5xl sm:text-6xl font-sans font-black tracking-tighter text-[#263247]">
                   {ch.num}
                 </span>
-                <span className="text-[10px] font-mono tracking-widest uppercase text-[#888b99]">
+                <span className="text-[10px] font-mono tracking-widest uppercase text-[#68758A] font-bold">
                   // {ch.tag}
                 </span>
               </div>
 
               {/* Middle Column: Narrative Explanation */}
               <div className="lg:col-span-5 flex flex-col gap-3">
-                <h3 className="text-2xl sm:text-3xl font-sans font-bold uppercase text-[#111215] tracking-tight">
+                <h3 className="text-2xl sm:text-3xl font-sans font-bold uppercase text-[#263247] tracking-tight">
                   {ch.title}
                 </h3>
-                <p className="text-sm text-[#444650] leading-relaxed">
+                <p className="text-sm text-[#475569] leading-relaxed">
                   {ch.body}
                 </p>
               </div>
 
               {/* Right Column: Mathematical Formalism */}
-              <div className="lg:col-span-4 bg-[#ebebe6] border border-[#d8d7d2] p-4 flex flex-col gap-2">
-                <div className="text-[9px] font-mono tracking-widest uppercase text-[#777a88]">
+              <div className="lg:col-span-4 bg-[#EEF2F8] border border-[#DCE3EE] rounded-xl p-4 flex flex-col gap-2 shadow-xs">
+                <div className="text-[9px] font-mono tracking-widest uppercase text-[#68758A] font-bold">
                   GOVERNING MATHEMATICAL EQUATION
                 </div>
-                <div className="font-mono text-xs font-bold text-[#111215] break-all bg-white p-2.5 border border-[#d2d1cb]">
+                <div className="font-mono text-xs font-bold text-[#14426B] break-all bg-white p-2.5 border border-[#DCE3EE] rounded-lg shadow-xs">
                   {ch.equation}
                 </div>
-                <div className="font-mono text-[10px] text-[#555866] pt-1">
+                <div className="font-mono text-[10px] text-[#475569] pt-1">
                   {ch.subEq}
                 </div>
               </div>

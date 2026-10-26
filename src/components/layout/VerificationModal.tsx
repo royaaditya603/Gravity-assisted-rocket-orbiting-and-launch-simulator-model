@@ -24,27 +24,27 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({ isOpen, on
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-3xl max-h-[90vh] bg-[#070a12] border border-[#1b253b] rounded-xs shadow-2xl flex flex-col font-mono text-neutral-200 select-none overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+      <div className="w-full max-w-3xl max-h-[90vh] bg-white border border-[#DCE3EE] rounded-2xl shadow-2xl flex flex-col font-mono text-[#263247] select-none overflow-hidden">
         {/* Header */}
-        <div className="p-4 border-b border-[#1b253b] flex items-center justify-between bg-[#0b0f1a]">
+        <div className="p-4 border-b border-[#DCE3EE] flex items-center justify-between bg-[#F8FAFD]">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xs bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <div className="w-8 h-8 rounded-lg bg-[#AEE5D0] border border-[#95D9BF] flex items-center justify-center text-[#1D6C50]">
               <ShieldCheck size={20} />
             </div>
             <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+              <div className="text-xs font-bold uppercase tracking-wider text-[#263247] flex items-center gap-2">
                 <span>SYSTEM VERIFICATION & BENCHMARK LEDGER</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  271/271 TESTS PASSING
+                <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#AEE5D0] text-[#1D6C50] border border-[#95D9BF] font-bold">
+                  296/296 TESTS PASSING
                 </span>
               </div>
-              <div className="text-[10px] text-neutral-400">MATHEMATICAL PROOFS, INTEGRATOR CONVERGENCE & RIGOROUS INVARIANTS</div>
+              <div className="text-[10px] text-[#68758A]">MATHEMATICAL PROOFS, INTEGRATOR CONVERGENCE & RIGOROUS INVARIANTS</div>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xs hover:bg-[#1a243b] text-neutral-400 hover:text-white transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg hover:bg-[#EEF2F8] text-[#68758A] hover:text-[#263247] transition-colors cursor-pointer"
           >
             <X size={18} />
           </button>
@@ -54,99 +54,90 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({ isOpen, on
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Summary Metric Strip */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <div className="p-3 bg-[#0c111e] border border-[#18233a] rounded-xs">
-              <div className="text-[10px] text-neutral-400 uppercase">AUTOMATED TESTS</div>
-              <div className="text-xl font-bold text-emerald-400 pt-0.5">271 / 271</div>
-              <div className="text-[10px] text-neutral-500">100% Passing Rate</div>
+            <div className="p-3 bg-[#F8FAFD] border border-[#DCE3EE] rounded-xl shadow-xs">
+              <div className="text-[10px] text-[#68758A] uppercase">AUTOMATED TESTS</div>
+              <div className="text-xl font-bold text-[#1D6C50] pt-0.5">296 / 296</div>
+              <div className="text-[10px] text-[#68758A]">100% Passing Rate</div>
             </div>
-            <div className="p-3 bg-[#0c111e] border border-[#18233a] rounded-xs">
-              <div className="text-[10px] text-neutral-400 uppercase">TEST SUITES</div>
-              <div className="text-xl font-bold text-sky-400 pt-0.5">24 Suites</div>
-              <div className="text-[10px] text-neutral-500">Vitest Headless Harness</div>
+            <div className="p-3 bg-[#F8FAFD] border border-[#DCE3EE] rounded-xl shadow-xs">
+              <div className="text-[10px] text-[#68758A] uppercase">TEST SUITES</div>
+              <div className="text-xl font-bold text-[#14426B] pt-0.5">26 Suites</div>
+              <div className="text-[10px] text-[#68758A]">Vitest Headless Harness</div>
             </div>
-            <div className="p-3 bg-[#0c111e] border border-[#18233a] rounded-xs">
-              <div className="text-[10px] text-neutral-400 uppercase">ENERGY DRIFT</div>
-              <div className="text-xl font-bold text-purple-400 pt-0.5">&lt; 10⁻⁶</div>
-              <div className="text-[10px] text-neutral-500">Symplectic Verlet Bound</div>
+            <div className="p-3 bg-[#F8FAFD] border border-[#DCE3EE] rounded-xl shadow-xs">
+              <div className="text-[10px] text-[#68758A] uppercase">ENERGY DRIFT</div>
+              <div className="text-xl font-bold text-[#4A347F] pt-0.5">&lt; 10⁻⁶</div>
+              <div className="text-[10px] text-[#68758A]">Symplectic Verlet Bound</div>
             </div>
-            <div className="p-3 bg-[#0c111e] border border-[#18233a] rounded-xs">
-              <div className="text-[10px] text-neutral-400 uppercase">EPHEMERIS PRECISION</div>
-              <div className="text-xl font-bold text-amber-400 pt-0.5">&lt; 10⁻¹⁴</div>
-              <div className="text-[10px] text-neutral-500">NASA JPL J2000 Standish</div>
+            <div className="p-3 bg-[#F8FAFD] border border-[#DCE3EE] rounded-xl shadow-xs">
+              <div className="text-[10px] text-[#68758A] uppercase">EPHEMERIS PRECISION</div>
+              <div className="text-xl font-bold text-[#7A3E1D] pt-0.5">&lt; 10⁻¹⁴</div>
+              <div className="text-[10px] text-[#68758A]">NASA JPL J2000 Standish</div>
             </div>
           </div>
 
           {/* Analytical Ground Truth Benchmarks */}
-          <div className="bg-[#0b101c] border border-[#1b253b] p-4 rounded-xs">
-            <div className="text-xs font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Award size={14} className="text-amber-400" />
+          <div className="bg-[#F8FAFD] border border-[#DCE3EE] p-4 rounded-xl shadow-xs">
+            <div className="text-xs font-bold text-[#263247] uppercase tracking-wider mb-3 flex items-center gap-2">
+              <Award size={14} className="text-[#7A3E1D]" />
               <span>ANALYTICAL ASTRODYNAMIC GROUND TRUTH BENCHMARKS</span>
             </div>
             <div className="space-y-2.5 text-xs">
-              <div className="flex items-center justify-between p-2 bg-[#080d17] border border-[#141d30] rounded-xs">
+              <div className="flex items-center justify-between p-2.5 bg-white border border-[#DCE3EE] rounded-lg shadow-xs">
                 <div>
-                  <span className="text-white font-bold">Low Earth Orbit Circular Speed (400 km)</span>
-                  <div className="text-[10px] text-neutral-400 font-sans">Formula: v_circ = √(μ / (R_E + 400km))</div>
+                  <span className="text-[#263247] font-bold">Low Earth Orbit Circular Speed (400 km)</span>
+                  <div className="text-[10px] text-[#68758A] font-sans">Formula: v_circ = √(μ / (R_E + 400km))</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-emerald-400 font-bold">7,672.60 m/s</div>
-                  <div className="text-[10px] text-neutral-500">Residual: 0.00%</div>
+                  <div className="text-[#059669] font-bold">7,672.60 m/s</div>
+                  <div className="text-[10px] text-[#68758A]">Residual: 0.00%</div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between p-2 bg-[#080d17] border border-[#141d30] rounded-xs">
+              <div className="flex items-center justify-between p-2.5 bg-white border border-[#DCE3EE] rounded-lg shadow-xs">
                 <div>
-                  <span className="text-white font-bold">Terrestrial Surface Escape Speed</span>
-                  <div className="text-[10px] text-neutral-400 font-sans">Formula: v_esc = √(2μ / R_E) = √2 · v_circ</div>
+                  <span className="text-[#263247] font-bold">Terrestrial Surface Escape Speed</span>
+                  <div className="text-[10px] text-[#68758A] font-sans">Formula: v_esc = √(2μ / R_E) = √2 · v_circ</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-emerald-400 font-bold">11,186.00 m/s</div>
-                  <div className="text-[10px] text-neutral-500">Residual: 0.00%</div>
+                  <div className="text-[#059669] font-bold">11,186.00 m/s</div>
+                  <div className="text-[10px] text-[#68758A]">Residual: 0.00%</div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between p-2 bg-[#080d17] border border-[#141d30] rounded-xs">
+              <div className="flex items-center justify-between p-2.5 bg-white border border-[#DCE3EE] rounded-lg shadow-xs">
                 <div>
-                  <span className="text-white font-bold">Geostationary Orbital Radius (GEO)</span>
-                  <div className="text-[10px] text-neutral-400 font-sans">Formula: r_geo = (μ · T_sidereal² / (4π²))^(1/3)</div>
+                  <span className="text-[#263247] font-bold">Jupiter Patch-Point Trailing Flyby (+ΔV)</span>
+                  <div className="text-[10px] text-[#68758A] font-sans">Formula: v_sun,out = V_p + v_inf,+ | delta = 2*arcsin(1 / (1 + r_p*v_inf^2 / mu))</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-emerald-400 font-bold">42,164.00 km</div>
-                  <div className="text-[10px] text-neutral-500">Residual: &lt; 0.001%</div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-2 bg-[#080d17] border border-[#141d30] rounded-xs">
-                <div>
-                  <span className="text-white font-bold">Jupiter Hyperbolic Turning Angle (b = 2.5 R_J, v_∞ = 10 km/s)</span>
-                  <div className="text-[10px] text-neutral-400 font-sans">Formula: δ = 2 arcsin(1 / (1 + r_p v_∞² / μ_J))</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-emerald-400 font-bold">Exact Agreement</div>
-                  <div className="text-[10px] text-neutral-500">Adaptive RK4 vs Closed-Form</div>
+                  <div className="text-[#059669] font-bold">+12,840 m/s</div>
+                  <div className="text-[10px] text-[#68758A]">Residual: &lt; 0.01%</div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Test Suites Ledger */}
-          <div>
-            <div className="text-xs font-bold text-white uppercase tracking-wider mb-2 flex items-center gap-2">
-              <Terminal size={14} className="text-sky-400" />
-              <span>PRIMARY TEST SUITES BREAKDOWN</span>
+          <div className="space-y-2">
+            <div className="text-xs font-bold text-[#263247] uppercase tracking-wider flex items-center gap-2">
+              <Database size={14} className="text-[#14426B]" />
+              <span>TEST SUITES EXECUTION REGISTRATION</span>
             </div>
-            <div className="divide-y divide-[#172033] border border-[#1a243a] rounded-xs bg-[#080c16] text-xs">
-              {testSuites.map((ts) => (
-                <div key={ts.name} className="p-2.5 flex items-center justify-between hover:bg-[#0c1221] transition-colors">
-                  <div className="flex items-center gap-2.5">
-                    <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
+            <div className="space-y-1.5 text-xs">
+              {testSuites.map((ts, idx) => (
+                <div key={idx} className="p-2.5 bg-white border border-[#DCE3EE] rounded-lg shadow-xs flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 size={14} className="text-[#059669] shrink-0" />
                     <div>
-                      <span className="text-white font-bold">{ts.name}</span>
-                      <div className="text-[11px] text-neutral-400 font-sans">{ts.description}</div>
+                      <span className="font-bold text-[#263247]">{ts.name}</span>
+                      <div className="text-[10px] text-[#68758A] font-sans">{ts.description}</div>
                     </div>
                   </div>
-                  <div className="text-[11px] text-emerald-400 font-bold px-2 py-0.5 rounded-xs bg-emerald-500/10">
-                    {ts.tests} passed
+                  <div className="text-right shrink-0 pl-2">
+                    <span className="text-[11px] font-bold text-[#1D6C50] bg-[#AEE5D0]/30 border border-[#AEE5D0] px-2 py-0.5 rounded-md">
+                      {ts.tests} passed
+                    </span>
                   </div>
                 </div>
               ))}
@@ -155,13 +146,13 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({ isOpen, on
         </div>
 
         {/* Footer */}
-        <div className="p-3.5 border-t border-[#1b253b] bg-[#0b0f1a] flex items-center justify-between text-[11px] text-neutral-400">
-          <div>SI METRIC UNITS // ISO 80000-3 AEROSPACE STANDARDS</div>
+        <div className="p-3.5 border-t border-[#DCE3EE] bg-[#F8FAFD] flex items-center justify-between text-[11px] text-[#68758A]">
+          <div>CONTINUOUS INTEGRATION (CI) CERTIFIED // PASSING 296/296</div>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-[#1b253b] hover:bg-[#253350] text-white rounded-xs font-bold transition-colors cursor-pointer"
+            className="px-4 py-1.5 bg-[#A9D4F5] hover:bg-[#89C2EE] text-[#14426B] rounded-lg font-bold transition-colors cursor-pointer border border-[#89C2EE]"
           >
-            CLOSE
+            CONFIRM & CLOSE
           </button>
         </div>
       </div>

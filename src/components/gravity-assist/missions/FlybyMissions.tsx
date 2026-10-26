@@ -42,12 +42,12 @@ export const FlybyMissions: React.FC<FlybyMissionsProps> = ({ onLoadPreset }) =>
   const propagatedActiveLeg: PropagatedLegResult = propagateMissionLeg(activeLeg);
 
   return (
-    <div className="w-full bg-[#10121a] border border-[#222638] p-5 rounded-xs flex flex-col gap-5 text-white">
+    <div className="w-full bg-white border border-[#DCE3EE] p-5 rounded-xl flex flex-col gap-5 text-[#263247] shadow-xs">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#222638] pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#DCE3EE] pb-3">
         <div className="flex items-center gap-2">
-          <BookOpen size={18} className="text-sky-400" />
-          <span className="font-mono text-xs font-bold uppercase tracking-wider text-neutral-200">
+          <BookOpen size={18} className="text-[#0284C7]" />
+          <span className="font-mono text-xs font-bold uppercase tracking-wider text-[#14426B]">
             HISTORICAL MISSION DOSSIERS & MULTI-PLANET SEQUENCE MODE
           </span>
         </div>
@@ -56,20 +56,20 @@ export const FlybyMissions: React.FC<FlybyMissionsProps> = ({ onLoadPreset }) =>
         <div className="flex items-center gap-2 font-mono text-[11px]">
           <button
             onClick={() => setViewMode('DOSSIERS')}
-            className={`px-3 py-1 rounded-xs border transition-colors ${
+            className={`px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${
               viewMode === 'DOSSIERS'
-                ? 'bg-sky-500 text-black font-bold border-sky-400'
-                : 'bg-[#181c2b] text-neutral-400 border-[#2a3047] hover:text-white'
+                ? 'bg-[#A9D4F5] text-[#14426B] font-bold border-[#A9D4F5] shadow-2xs'
+                : 'bg-[#EEF2F8] text-[#68758A] border-[#DCE3EE] hover:text-[#263247]'
             }`}
           >
             MISSION DOSSIERS
           </button>
           <button
             onClick={() => setViewMode('SEQUENTIAL_TOUR')}
-            className={`px-3 py-1 rounded-xs border transition-colors flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 cursor-pointer ${
               viewMode === 'SEQUENTIAL_TOUR'
-                ? 'bg-amber-500 text-black font-bold border-amber-400'
-                : 'bg-[#181c2b] text-neutral-400 border-[#2a3047] hover:text-white'
+                ? 'bg-[#FFD2B8] text-[#7A3E1D] font-bold border-[#FFD2B8] shadow-2xs'
+                : 'bg-[#EEF2F8] text-[#68758A] border-[#DCE3EE] hover:text-[#263247]'
             }`}
           >
             <Layers size={12} />

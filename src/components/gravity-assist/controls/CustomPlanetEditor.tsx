@@ -8,7 +8,7 @@ import {
   computeCircularOrbitalSpeed,
 } from '../../../physics/FlybyScenario';
 import { ParameterTooltip, UnitBadge } from './ParameterTooltip';
-import { Sliders, AlertTriangle, ShieldCheck, HelpCircle, Compass, Zap, Info } from 'lucide-react';
+import { Sliders, AlertTriangle } from 'lucide-react';
 
 export interface CustomPlanetEditorProps {
   planet: {
@@ -77,12 +77,12 @@ export const CustomPlanetEditor: React.FC<CustomPlanetEditorProps> = ({
   }, [planet.name, planet.massKg, planet.radiusM, planet.mu]);
 
   return (
-    <div className="bg-[#0c0e17] border border-[#23293d] p-4 rounded-xs flex flex-col gap-4 font-mono text-white">
+    <div className="bg-[#F8FAFD] border border-[#DCE3EE] p-4 rounded-xl flex flex-col gap-4 font-mono text-[#263247] shadow-2xs">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1c2234] pb-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#DCE3EE] pb-2.5">
         <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full bg-purple-500 ring-2 ring-purple-400/40" />
-          <span className="text-xs font-bold text-purple-300 uppercase">
+          <span className="w-3 h-3 rounded-full bg-[#C9BDF2] ring-2 ring-[#C9BDF2]/50" />
+          <span className="text-xs font-bold text-[#4A347F] uppercase">
             CUSTOM PLANET CONFIGURATION & PHYSICAL ATTRIBUTES
           </span>
           <ParameterTooltip
@@ -95,10 +95,10 @@ export const CustomPlanetEditor: React.FC<CustomPlanetEditorProps> = ({
           <button
             type="button"
             onClick={() => setShowAdvancedOverrides((prev) => !prev)}
-            className={`px-2 py-0.5 rounded-xs text-[10px] font-bold border transition-colors cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer shadow-2xs ${
               showAdvancedOverrides
-                ? 'bg-purple-900/60 text-purple-200 border-purple-500'
-                : 'bg-[#141724] text-neutral-400 hover:text-white border-[#272f44]'
+                ? 'bg-[#C9BDF2]/40 text-[#4A347F] border-[#C9BDF2]'
+                : 'bg-white text-[#68758A] hover:text-[#263247] border-[#DCE3EE]'
             }`}
           >
             {showAdvancedOverrides ? 'HIDE ADVANCED OVERRIDES' : 'ADVANCED μ OVERRIDE & ORBIT'}
@@ -111,40 +111,35 @@ export const CustomPlanetEditor: React.FC<CustomPlanetEditorProps> = ({
         {/* 1. Planet Name */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <label className="text-neutral-400 font-bold uppercase text-[10px]">
+            <label className="text-[#68758A] font-bold uppercase text-[10px]">
               PLANET NAME
             </label>
-            <span className="text-[9px] text-neutral-500">Display label</span>
+            <span className="text-[9px] text-[#94A3B8]">Display label</span>
           </div>
           <input
             type="text"
             value={planet.name}
             onChange={(e) => {
               const name = e.target.value;
-              onChangePlanet((prev: any) => ({
-                ...prev,
-                name,
-                isTheoretical: true,
-              }));
+              onChangePlanet((prev: any) => ({ ...prev, name, isTheoretical: true }));
             }}
-            placeholder="e.g., Kepler-186f, Super-Jupiter"
-            className="bg-[#141826] border border-[#283148] px-2.5 py-1.5 rounded-xs text-white focus:outline-none focus:border-purple-400"
+            placeholder="e.g. Kepler-22b"
+            className="bg-white border border-[#DCE3EE] px-2.5 py-1.5 rounded-lg text-[#263247] focus:outline-none focus:border-[#0284C7] shadow-2xs font-medium"
           />
-          <span className="text-[9px] text-neutral-500">Theoretical / Exoplanet identifier</span>
         </div>
 
         {/* 2. Planet Mass */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
-              <label className="text-neutral-400 font-bold uppercase text-[10px]">
-                PLANET MASS (M)
+              <label className="text-[#68758A] font-bold uppercase text-[10px]">
+                MASS (M)
               </label>
               <ParameterTooltip
-                title="Planet Mass"
-                description="Total physical mass of the planet in kilograms. In mass-authoritative mode, standard gravitational parameter μ is automatically computed as μ = G · M."
+                title="Mass vs μ Coupling"
+                description="Mass M couples to μ through Newton's constant G. Changes automatically update standard gravitational parameter."
                 unit="kg"
-                formula="μ = 6.6743e-11 · M"
+                formula="μ = G · M"
               />
             </div>
             <UnitBadge unit="kg" />
@@ -153,40 +148,39 @@ export const CustomPlanetEditor: React.FC<CustomPlanetEditorProps> = ({
             type="text"
             value={rawMassInput}
             onChange={(e) => {
-              const strVal = e.target.value;
-              setRawMassInput(strVal);
-              const m = parseFloat(strVal);
-              if (!isNaN(m) && m > 0) {
+              setRawMassInput(e.target.value);
+              const val = parseFloat(e.target.value);
+              if (!isNaN(val) && val > 0) {
                 onChangePlanet((prev: any) => {
-                  const synced = syncMassAndMu(m, prev.mu, prev.authority || 'MASS_AUTHORITATIVE');
+                  const synced = syncMassAndMu(val, 0, 'MASS_AUTHORITATIVE');
                   return {
                     ...prev,
-                    massKg: synced.massKg,
-                    mu: prev.authority === 'MU_AUTHORITATIVE' ? prev.mu : synced.mu,
+                    massKg: val,
+                    mu: synced.mu,
                     isTheoretical: true,
                   };
                 });
               }
             }}
-            placeholder="e.g. 5.972e24 or 1.898e27"
-            className="bg-[#141826] border border-[#283148] px-2.5 py-1.5 rounded-xs text-white focus:outline-none focus:border-purple-400"
+            placeholder="5.972e24"
+            className="bg-white border border-[#DCE3EE] px-2.5 py-1.5 rounded-lg text-[#14426B] font-bold focus:outline-none focus:border-[#0284C7] shadow-2xs"
           />
-          <div className="flex items-center justify-between text-[9px] text-neutral-400">
+          <div className="flex items-center justify-between text-[9px] text-[#68758A]">
             <span>Earth: 5.972e24 kg</span>
             <span>Jupiter: 1.898e27 kg</span>
           </div>
         </div>
 
-        {/* 3. Mean Radius */}
+        {/* 3. Physical Radius */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
-              <label className="text-neutral-400 font-bold uppercase text-[10px]">
-                MEAN RADIUS (R_p)
+              <label className="text-[#68758A] font-bold uppercase text-[10px]">
+                PHYSICAL RADIUS (R_p)
               </label>
               <ParameterTooltip
-                title="Mean Reference Radius"
-                description="Mean volumetric spherical radius of the planet in kilometres. Closest-approach periapsis altitude is measured relative to this surface (r_p = R_p + h_p). Sub-surface passes (h_p <= 0) cause collisions."
+                title="Physical Surface Radius"
+                description="Spherical body physical radius. Defines the surface boundary for collision detection and surface gravity."
                 unit="km"
               />
             </div>
@@ -195,8 +189,8 @@ export const CustomPlanetEditor: React.FC<CustomPlanetEditorProps> = ({
           <input
             type="number"
             step="100"
-            min="100"
-            value={radiusKm}
+            min="10"
+            value={radiusKm.toFixed(0)}
             onChange={(e) => {
               const rKm = parseFloat(e.target.value);
               if (!isNaN(rKm) && rKm > 0) {
@@ -207,9 +201,9 @@ export const CustomPlanetEditor: React.FC<CustomPlanetEditorProps> = ({
                 }));
               }
             }}
-            className="bg-[#141826] border border-[#283148] px-2.5 py-1.5 rounded-xs text-white focus:outline-none focus:border-purple-400"
+            className="bg-white border border-[#DCE3EE] px-2.5 py-1.5 rounded-lg text-[#263247] focus:outline-none focus:border-[#0284C7] shadow-2xs font-medium"
           />
-          <div className="flex items-center justify-between text-[9px] text-neutral-400">
+          <div className="flex items-center justify-between text-[9px] text-[#68758A]">
             <span>Mars: 3,389 km</span>
             <span>Earth: 6,371 km</span>
           </div>
@@ -217,39 +211,39 @@ export const CustomPlanetEditor: React.FC<CustomPlanetEditorProps> = ({
       </div>
 
       {/* Automatically Calculated Gravitational Parameter Display */}
-      <div className="bg-[#111420] p-3 rounded-xs border border-[#1e2436] flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div className="bg-white p-3.5 rounded-xl border border-[#DCE3EE] flex flex-wrap items-center justify-between gap-3 text-xs shadow-2xs">
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-neutral-400 font-bold uppercase">
+            <span className="text-[10px] text-[#68758A] font-bold uppercase">
               STANDARD GRAVITATIONAL PARAMETER (μ = G · M):
             </span>
             <UnitBadge unit="m³/s²" />
           </div>
-          <div className="text-amber-400 font-bold text-sm">
+          <div className="text-[#B45309] font-bold text-sm">
             {planet.mu.toExponential(5)} m³/s²
           </div>
-          <span className="text-[9px] text-neutral-500">
+          <span className="text-[9px] text-[#94A3B8]">
             Computed via Newton's G (6.67430 × 10⁻¹¹ m³/(kg·s²))
           </span>
         </div>
 
         {/* Physical Characteristics Pill Badges */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="bg-[#161a29] px-2.5 py-1 rounded-xs border border-[#252c42] flex flex-col text-right">
-            <span className="text-[9px] text-neutral-400">SURFACE GRAVITY</span>
-            <span className="text-purple-300 font-bold text-[11px]">
+          <div className="bg-[#F8FAFD] px-3 py-1.5 rounded-lg border border-[#DCE3EE] flex flex-col text-right">
+            <span className="text-[9px] text-[#68758A]">SURFACE GRAVITY</span>
+            <span className="text-[#7C3AED] font-bold text-[11px]">
               {surfaceGravityMPerS2.toFixed(2)} m/s² ({surfaceGravityG.toFixed(2)} g)
             </span>
           </div>
-          <div className="bg-[#161a29] px-2.5 py-1 rounded-xs border border-[#252c42] flex flex-col text-right">
-            <span className="text-[9px] text-neutral-400">ESCAPE SPEED</span>
-            <span className="text-sky-300 font-bold text-[11px]">
+          <div className="bg-[#F8FAFD] px-3 py-1.5 rounded-lg border border-[#DCE3EE] flex flex-col text-right">
+            <span className="text-[9px] text-[#68758A]">ESCAPE SPEED</span>
+            <span className="text-[#0284C7] font-bold text-[11px]">
               {escapeVelocityKmPerS.toFixed(2)} km/s
             </span>
           </div>
-          <div className="bg-[#161a29] px-2.5 py-1 rounded-xs border border-[#252c42] flex flex-col text-right">
-            <span className="text-[9px] text-neutral-400">MEAN DENSITY</span>
-            <span className="text-emerald-300 font-bold text-[11px]">
+          <div className="bg-[#F8FAFD] px-3 py-1.5 rounded-lg border border-[#DCE3EE] flex flex-col text-right">
+            <span className="text-[9px] text-[#68758A]">MEAN DENSITY</span>
+            <span className="text-[#059669] font-bold text-[11px]">
               {(densityKgM3 / 1000).toFixed(2)} g/cm³
             </span>
           </div>
@@ -258,12 +252,12 @@ export const CustomPlanetEditor: React.FC<CustomPlanetEditorProps> = ({
 
       {/* Validation Errors & Inconsistency Warnings */}
       {validationErrors.length > 0 && (
-        <div className="p-2.5 bg-rose-950/60 border border-rose-600/70 rounded-xs flex flex-col gap-1 text-xs text-rose-200">
-          <div className="flex items-center gap-1.5 font-bold text-rose-300">
-            <AlertTriangle size={14} className="text-rose-400" />
+        <div className="p-3 bg-[#FEE2E2] border border-[#FCA5A5] rounded-xl flex flex-col gap-1 text-xs text-[#991B1B]">
+          <div className="flex items-center gap-1.5 font-bold text-[#991B1B]">
+            <AlertTriangle size={14} className="text-[#DC2626]" />
             <span>INVALID CUSTOM PLANET CONFIGURATION:</span>
           </div>
-          <ul className="list-disc list-inside text-[11px] text-rose-300/90 pl-1">
+          <ul className="list-disc list-inside text-[11px] text-[#991B1B]/90 pl-1">
             {validationErrors.map((err, i) => (
               <li key={i}>{err}</li>
             ))}
@@ -272,26 +266,26 @@ export const CustomPlanetEditor: React.FC<CustomPlanetEditorProps> = ({
       )}
 
       {!consistency.isConsistent && consistency.warning && (
-        <div className="p-2.5 bg-amber-950/60 border border-amber-600/60 rounded-xs flex items-center gap-2 text-amber-200 text-xs">
-          <AlertTriangle size={14} className="text-amber-400 flex-shrink-0" />
+        <div className="p-3 bg-[#FEF3C7] border border-[#FCD34D] rounded-xl flex items-center gap-2 text-[#92400E] text-xs">
+          <AlertTriangle size={14} className="text-[#D97706] flex-shrink-0" />
           <span>{consistency.warning}</span>
         </div>
       )}
 
       {/* Advanced Overrides Disclosure Section */}
       {showAdvancedOverrides && (
-        <div className="bg-[#080a10] p-3.5 rounded-xs border border-[#1d2334] flex flex-col gap-3.5 text-xs">
-          <div className="flex items-center justify-between border-b border-[#181d2c] pb-1.5">
-            <span className="text-[11px] font-bold text-purple-300 uppercase flex items-center gap-1.5">
+        <div className="bg-white p-4 rounded-xl border border-[#DCE3EE] flex flex-col gap-3.5 text-xs shadow-2xs">
+          <div className="flex items-center justify-between border-b border-[#DCE3EE] pb-1.5">
+            <span className="text-[11px] font-bold text-[#4A347F] uppercase flex items-center gap-1.5">
               <Sliders size={13} /> ADVANCED GRAVITATIONAL PARAMETER & ORBITAL OVERRIDES
             </span>
-            <span className="text-[9px] text-neutral-500">For astrodynamic calibration & research</span>
+            <span className="text-[9px] text-[#94A3B8]">For astrodynamic calibration & research</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Authority Mode Toggle */}
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-neutral-400 font-bold uppercase">
+              <label className="text-[10px] text-[#68758A] font-bold uppercase">
                 AUTHORITATIVE VALUE
               </label>
               <div className="grid grid-cols-2 gap-1">
@@ -304,10 +298,10 @@ export const CustomPlanetEditor: React.FC<CustomPlanetEditorProps> = ({
                       mu: G_NEWTON * prev.massKg,
                     }));
                   }}
-                  className={`py-1 px-1.5 rounded-xs text-[10px] font-bold border transition-colors cursor-pointer ${
+                  className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
                     planet.authority === 'MASS_AUTHORITATIVE'
-                      ? 'bg-amber-500 text-black border-amber-400'
-                      : 'bg-[#141724] text-neutral-400 border-[#242c40]'
+                      ? 'bg-[#FFD2B8] text-[#7A3E1D] border-[#FFD2B8]'
+                      : 'bg-[#F8FAFD] text-[#68758A] border-[#DCE3EE]'
                   }`}
                 >
                   MASS (M)
@@ -321,51 +315,27 @@ export const CustomPlanetEditor: React.FC<CustomPlanetEditorProps> = ({
                       massKg: prev.mu / G_NEWTON,
                     }));
                   }}
-                  className={`py-1 px-1.5 rounded-xs text-[10px] font-bold border transition-colors cursor-pointer ${
+                  className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
                     planet.authority === 'MU_AUTHORITATIVE'
-                      ? 'bg-sky-500 text-black border-sky-400'
-                      : 'bg-[#141724] text-neutral-400 border-[#242c40]'
+                      ? 'bg-[#A9D4F5] text-[#14426B] border-[#A9D4F5]'
+                      : 'bg-[#F8FAFD] text-[#68758A] border-[#DCE3EE]'
                   }`}
                 >
                   GRAV. PARAM (μ)
                 </button>
               </div>
-              <span className="text-[9px] text-neutral-500">
+              <span className="text-[9px] text-[#94A3B8]">
                 {planet.authority === 'MASS_AUTHORITATIVE'
                   ? 'μ derived automatically from M'
                   : 'M derived automatically from μ'}
               </span>
             </div>
 
-            {/* Direct mu Override */}
+            {/* Semi-major axis */}
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
-                <label className="text-[10px] text-neutral-400 font-bold uppercase">
-                  MANUAL μ OVERRIDE (m³/s²)
-                </label>
-                <UnitBadge unit="m³/s²" />
-              </div>
-              <input
-                type="text"
-                placeholder="Leave blank for nominal GM"
-                value={planet.muOverride !== undefined ? planet.muOverride.toExponential(4) : ''}
-                onChange={(e) => {
-                  const val = e.target.value.trim() ? parseFloat(e.target.value) : undefined;
-                  onChangePlanet((prev: any) => ({
-                    ...prev,
-                    muOverride: val && !isNaN(val) && val > 0 ? val : undefined,
-                  }));
-                }}
-                className="bg-[#141826] border border-[#283148] px-2 py-1 rounded-xs text-white"
-              />
-              <span className="text-[9px] text-neutral-500">Overrides nominal gravitational parameter</span>
-            </div>
-
-            {/* Heliocentric Orbital Radius (AU) */}
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] text-neutral-400 font-bold uppercase">
-                  ORBITAL DISTANCE (SEMI-MAJOR AXIS)
+                <label className="text-[10px] text-[#68758A] font-bold uppercase">
+                  SEMI-MAJOR AXIS (a)
                 </label>
                 <UnitBadge unit="AU" />
               </div>
@@ -373,47 +343,48 @@ export const CustomPlanetEditor: React.FC<CustomPlanetEditorProps> = ({
                 type="number"
                 step="0.1"
                 min="0.1"
-                max="100"
                 value={(planet.semiMajorAxisM / AU).toFixed(3)}
                 onChange={(e) => {
-                  const val = parseFloat(e.target.value);
-                  if (!isNaN(val) && val > 0) {
-                    const aM = val * AU;
-                    const spd = computeCircularOrbitalSpeed(aM);
+                  const auVal = parseFloat(e.target.value);
+                  if (!isNaN(auVal) && auVal > 0) {
+                    const smaM = auVal * AU;
+                    const vOrb = computeCircularOrbitalSpeed(smaM);
                     onChangePlanet((prev: any) => ({
                       ...prev,
-                      semiMajorAxisM: aM,
-                      orbitalSpeedMPerS: spd,
-                      customVelocityVectorMPerS: { x: 0, y: spd, z: 0 },
+                      semiMajorAxisM: smaM,
+                      orbitalSpeedMPerS: vOrb,
                     }));
                   }
                 }}
-                className="bg-[#141826] border border-[#283148] px-2 py-1 rounded-xs text-white"
+                className="bg-[#F8FAFD] border border-[#DCE3EE] px-2 py-1 rounded-lg text-[#263247]"
               />
-              <span className="text-[9px] text-emerald-400">
-                Circular speed: {(planet.orbitalSpeedMPerS / 1000).toFixed(2)} km/s
-              </span>
             </div>
-          </div>
 
-          {/* Model Assumptions / Custom Notes */}
-          <div className="flex flex-col gap-1 border-t border-[#181d2c] pt-2">
-            <label className="text-[10px] text-neutral-400 font-bold uppercase">
-              MODEL ASSUMPTIONS & SOURCE ANNOTATION
-            </label>
-            <input
-              type="text"
-              value={planet.sourceOrReference || ''}
-              onChange={(e) => {
-                const text = e.target.value;
-                onChangePlanet((prev: any) => ({
-                  ...prev,
-                  sourceOrReference: text,
-                }));
-              }}
-              placeholder="e.g., Theoretical ocean-world model, unperturbed circular heliocentric orbit."
-              className="bg-[#141826] border border-[#283148] px-2.5 py-1 text-[11px] rounded-xs text-white"
-            />
+            {/* Circular orbital speed */}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] text-[#68758A] font-bold uppercase">
+                  ORBITAL SPEED (v_orb)
+                </label>
+                <UnitBadge unit="km/s" />
+              </div>
+              <input
+                type="number"
+                step="0.5"
+                min="0.1"
+                value={(planet.orbitalSpeedMPerS / 1000).toFixed(2)}
+                onChange={(e) => {
+                  const spdKm = parseFloat(e.target.value);
+                  if (!isNaN(spdKm) && spdKm > 0) {
+                    onChangePlanet((prev: any) => ({
+                      ...prev,
+                      orbitalSpeedMPerS: spdKm * 1000.0,
+                    }));
+                  }
+                }}
+                className="bg-[#F8FAFD] border border-[#DCE3EE] px-2 py-1 rounded-lg text-[#059669] font-bold"
+              />
+            </div>
           </div>
         </div>
       )}

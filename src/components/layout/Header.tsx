@@ -7,7 +7,6 @@ import {
   BookOpen,
   ShieldCheck,
   Settings,
-  Cpu,
 } from 'lucide-react';
 
 export type WorkspaceMode = 'GRAVITY_ASSIST' | 'ORBITAL_ASCENT' | 'INTERPLANETARY' | 'ANALYSIS_LAB';
@@ -30,76 +29,76 @@ export const Header: React.FC<HeaderProps> = ({
   simStatus = 'NOMINAL // DOPRI5 & RK4 CONVERGED',
 }) => {
   return (
-    <header className="w-full bg-[#070a12]/95 border-b border-[#182033] px-3 sm:px-6 py-2.5 sticky top-0 z-40 backdrop-blur-md select-none">
+    <header className="w-full bg-white/95 border-b border-[#DCE3EE] px-3 sm:px-6 py-2.5 sticky top-0 z-40 backdrop-blur-md select-none shadow-xs">
       <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
         {/* Brand Identity / System Callout */}
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 bg-gradient-to-br from-sky-400 to-blue-600 text-black flex items-center justify-center rounded-xs font-mono font-black text-xs shadow-sm">
+          <div className="w-7 h-7 bg-gradient-to-br from-[#A9D4F5] to-[#7BB6E8] text-[#1D4F7A] flex items-center justify-center rounded-lg font-mono font-black text-xs shadow-xs border border-[#89C3EE]">
             ▲
           </div>
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
-              <span className="font-sans font-black tracking-tight text-sm uppercase text-white">
+              <span className="font-sans font-black tracking-tight text-sm uppercase text-[#263247]">
                 ASTRA
               </span>
-              <span className="text-[10px] font-mono text-cyan-400 font-bold px-1.5 py-0.2 bg-cyan-950/60 border border-cyan-500/30 rounded-xs">
-                V2.0
+              <span className="text-[10px] font-mono text-[#1E5F8A] font-bold px-1.5 py-0.2 bg-[#EEF2F8] border border-[#CAD5E4] rounded-md">
+                V2.1
               </span>
             </div>
-            <span className="text-[9px] font-mono tracking-widest uppercase text-neutral-400">
+            <span className="text-[9px] font-mono tracking-widest uppercase text-[#68758A]">
               ORBITAL & LAUNCH FLIGHT SIMULATOR
             </span>
           </div>
         </div>
 
-        {/* Workspace Switcher Tabs */}
-        <nav className="flex items-center gap-1 sm:gap-1.5 text-[11px] font-mono tracking-wider uppercase bg-[#0b0f1a] p-1 border border-[#1b253b] rounded-xs">
+        {/* Workspace Switcher Tabs (Soft pastel surface) */}
+        <nav className="flex items-center gap-1 sm:gap-1.5 text-[11px] font-mono tracking-wider uppercase bg-[#EEF2F8] p-1 border border-[#DCE3EE] rounded-xl shadow-xs">
           <button
             onClick={() => onChangeWorkspace?.('GRAVITY_ASSIST')}
-            className={`px-2.5 py-1 rounded-xs flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer ${
               activeWorkspace === 'GRAVITY_ASSIST'
-                ? 'bg-[#18233c] text-sky-300 font-bold border border-sky-500/40'
-                : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#101626]'
+                ? 'bg-white text-[#1D4F7A] font-bold border border-[#A9D4F5] shadow-xs'
+                : 'text-[#68758A] hover:text-[#263247] hover:bg-white/60'
             }`}
           >
-            <Orbit size={13} className="text-sky-400" />
+            <Orbit size={13} className="text-[#3882B6]" />
             <span>GRAVITY ASSIST</span>
           </button>
 
           <button
             onClick={() => onChangeWorkspace?.('ORBITAL_ASCENT')}
-            className={`px-2.5 py-1 rounded-xs flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer ${
               activeWorkspace === 'ORBITAL_ASCENT'
-                ? 'bg-[#18233c] text-sky-300 font-bold border border-sky-500/40'
-                : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#101626]'
+                ? 'bg-white text-[#8C3A0F] font-bold border border-[#FFD2B8] shadow-xs'
+                : 'text-[#68758A] hover:text-[#263247] hover:bg-white/60'
             }`}
           >
-            <Rocket size={13} className="text-amber-400" />
+            <Rocket size={13} className="text-[#B86230]" />
             <span className="hidden sm:inline">ORBITAL</span> ASCENT
           </button>
 
           <button
             onClick={() => onChangeWorkspace?.('INTERPLANETARY')}
-            className={`px-2.5 py-1 rounded-xs flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer ${
               activeWorkspace === 'INTERPLANETARY'
-                ? 'bg-[#18233c] text-sky-300 font-bold border border-sky-500/40'
-                : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#101626]'
+                ? 'bg-white text-[#5B478F] font-bold border border-[#C9BDF2] shadow-xs'
+                : 'text-[#68758A] hover:text-[#263247] hover:bg-white/60'
             }`}
           >
-            <Compass size={13} className="text-purple-400" />
+            <Compass size={13} className="text-[#6D5AA6]" />
             <span className="hidden md:inline">INTERPLANETARY</span>
             <span className="md:hidden">MISSIONS</span>
           </button>
 
           <button
             onClick={() => onChangeWorkspace?.('ANALYSIS_LAB')}
-            className={`px-2.5 py-1 rounded-xs flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer ${
               activeWorkspace === 'ANALYSIS_LAB'
-                ? 'bg-[#18233c] text-sky-300 font-bold border border-sky-500/40'
-                : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#101626]'
+                ? 'bg-white text-[#1D6C50] font-bold border border-[#AEE5D0] shadow-xs'
+                : 'text-[#68758A] hover:text-[#263247] hover:bg-white/60'
             }`}
           >
-            <LineChart size={13} className="text-emerald-400" />
+            <LineChart size={13} className="text-[#2D8A68]" />
             <span>ANALYSIS</span>
           </button>
         </nav>
@@ -109,21 +108,21 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Verification Ledger Pill */}
           <button
             onClick={onOpenVerification}
-            title="Inspect 271 Automated Tests & Analytical Benchmarks"
-            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xs bg-[#0b0f1a] hover:bg-[#12192b] border border-[#1b253b] text-[10px] font-mono text-neutral-300 transition-colors cursor-pointer"
+            title="Inspect 296 Automated Tests & Analytical Benchmarks"
+            className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-[#EEF2F8] border border-[#DCE3EE] text-[10px] font-mono text-[#263247] transition-colors cursor-pointer shadow-xs"
           >
-            <ShieldCheck size={13} className="text-emerald-400" />
-            <span className="font-bold text-white">271/271</span>
-            <span className="text-neutral-400">VERIFIED</span>
+            <ShieldCheck size={13} className="text-[#2D8A68]" />
+            <span className="font-bold text-[#263247]">296/296</span>
+            <span className="text-[#68758A]">VERIFIED</span>
           </button>
 
           {/* Principles Dossier Drawer Button */}
           <button
             onClick={onOpenPrinciples}
             title="Open Astrodynamics Mathematical Principles Dossier"
-            className="flex items-center gap-1 px-2.5 py-1 bg-[#0b0f1a] hover:bg-[#12192b] border border-[#1b253b] text-neutral-300 hover:text-white text-[11px] font-mono rounded-xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-[#EEF2F8] border border-[#DCE3EE] text-[#263247] text-[11px] font-mono rounded-lg transition-colors cursor-pointer shadow-xs"
           >
-            <BookOpen size={13} className="text-sky-400" />
+            <BookOpen size={13} className="text-[#3882B6]" />
             <span className="hidden sm:inline">PRINCIPLES</span>
           </button>
 
@@ -131,7 +130,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onOpenSettings}
             title="Display, Hardware & Control Settings"
-            className="p-1.5 bg-[#0b0f1a] hover:bg-[#12192b] border border-[#1b253b] text-neutral-300 hover:text-white rounded-xs transition-colors cursor-pointer"
+            className="p-2 bg-white hover:bg-[#EEF2F8] border border-[#DCE3EE] text-[#68758A] hover:text-[#263247] rounded-lg transition-colors cursor-pointer shadow-xs"
           >
             <Settings size={14} />
           </button>

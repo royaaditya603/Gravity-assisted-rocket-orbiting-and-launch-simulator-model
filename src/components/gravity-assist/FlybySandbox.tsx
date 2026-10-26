@@ -357,50 +357,50 @@ export const FlybySandbox: React.FC<FlybySandboxProps> = ({
   return (
     <section
       id="gravity-assist-sandbox"
-      className="w-full bg-[#08090d] text-white py-16 px-4 sm:px-8 border-t border-b border-[#202535]"
+      className="w-full bg-[#F5F7FB] text-[#263247] py-12 px-4 sm:px-8 border-b border-[#DCE3EE]"
     >
       <div className="max-w-7xl mx-auto flex flex-col gap-8">
         {/* Section Header */}
         <div className="flex flex-col gap-2.5">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
-            <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-amber-400 font-bold">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#FFD2B8] border border-[#B86230] animate-pulse" />
+            <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#9C4217] font-bold">
               [ 05 // DEDICATED MULTI-PLANET GRAVITY ASSIST ENGINE ]
             </span>
           </div>
-          <h2 className="text-3xl sm:text-5xl font-sans font-black tracking-tight uppercase">
+          <h2 className="text-3xl sm:text-5xl font-sans font-black tracking-tight uppercase text-[#263247]">
             Multi-Planet Gravity Assist Simulator
           </h2>
-          <p className="text-sm text-neutral-400 max-w-3xl leading-relaxed">
+          <p className="text-sm text-[#68758A] max-w-3xl leading-relaxed">
             A planetary gravity assist is an unperturbed hyperbolic encounter in the planet's rest frame where speed is strictly
-            conserved (<span className="text-amber-400 font-mono">||v_∞(+) || = ||v_∞(-)||</span>). When transformed to the
+            conserved (<span className="text-[#9C4217] font-mono font-bold">||v_∞(+) || = ||v_∞(-)||</span>). When transformed to the
             Sun's heliocentric frame, orbital momentum is exchanged with the moving planet, delivering monumental velocity
-            boosts (<span className="text-emerald-400 font-mono">Δv_assist</span>) or high-efficiency gravitational braking.
+            boosts (<span className="text-[#1D6C50] font-mono font-bold">Δv_assist</span>) or high-efficiency gravitational braking.
           </p>
         </div>
 
         {/* Workspace Mode Tabs */}
-        <div className="flex items-center gap-2 border-b border-[#1b253b] pb-2 text-xs font-mono">
+        <div className="flex items-center gap-2 border-b border-[#DCE3EE] pb-2 text-xs font-mono">
           <button
             onClick={() => setActiveTab('SIMULATION')}
-            className={`px-4 py-2 rounded-xs border font-bold flex items-center gap-2 transition-colors cursor-pointer ${
+            className={`px-4 py-2 rounded-lg border font-bold flex items-center gap-2 transition-colors cursor-pointer shadow-xs ${
               activeTab === 'SIMULATION'
-                ? 'bg-[#18233c] text-sky-300 border-sky-500/50'
-                : 'bg-[#0d121f] text-neutral-400 border-[#1a233a] hover:text-white'
+                ? 'bg-white text-[#1D4F7A] border-[#A9D4F5]'
+                : 'bg-[#EEF2F8] text-[#68758A] border-[#DCE3EE] hover:text-[#263247] hover:bg-white'
             }`}
           >
-            <Orbit size={14} className="text-sky-400" />
+            <Orbit size={14} className="text-[#3882B6]" />
             <span>3D TRAJECTORY VIEWPORT & CONTROLS</span>
           </button>
           <button
             onClick={() => setActiveTab('ANALYSIS')}
-            className={`px-4 py-2 rounded-xs border font-bold flex items-center gap-2 transition-colors cursor-pointer ${
+            className={`px-4 py-2 rounded-lg border font-bold flex items-center gap-2 transition-colors cursor-pointer shadow-xs ${
               activeTab === 'ANALYSIS'
-                ? 'bg-[#18233c] text-emerald-300 border-emerald-500/50'
-                : 'bg-[#0d121f] text-neutral-400 border-[#1a233a] hover:text-white'
+                ? 'bg-white text-[#1D6C50] border-[#AEE5D0]'
+                : 'bg-[#EEF2F8] text-[#68758A] border-[#DCE3EE] hover:text-[#263247] hover:bg-white'
             }`}
           >
-            <LineChart size={14} className="text-emerald-400" />
+            <LineChart size={14} className="text-[#2D8A68]" />
             <span>ANALYSIS LAB & FLIGHT DYNAMICS</span>
           </button>
         </div>
@@ -513,17 +513,17 @@ export const FlybySandbox: React.FC<FlybySandboxProps> = ({
         {/* 4. Collapsible Parameter Panel */}
         <div id="flyby-parameters" className="w-full">
           {isParamsCollapsed ? (
-            <div className="w-full bg-[#0c0e16] border border-[#1f2538] p-3 rounded-xs flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-neutral-300">
+            <div className="w-full bg-white border border-[#DCE3EE] p-3.5 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-[#263247] shadow-xs">
               <div className="flex flex-wrap items-center gap-3">
-                <span className="w-2 h-2 rounded-full bg-amber-400" />
-                <span>ACTIVE TARGET: <strong className="text-white">{scenario.planet.name.toUpperCase()}</strong></span>
-                <span>v_∞: <strong className="text-amber-400">{(scenario.encounter.vInfSpeedMPerS / 1000).toFixed(1)} km/s</strong></span>
-                <span>PERIAPSIS: <strong className="text-emerald-400">{scenario.encounter.periapsisAltitudeKm.toLocaleString()} km</strong></span>
-                <span>PASS: <strong className="text-sky-400">{scenario.encounter.passType}</strong></span>
+                <span className="w-2 h-2 rounded-full bg-[#B45309]" />
+                <span>ACTIVE TARGET: <strong className="text-[#263247]">{scenario.planet.name.toUpperCase()}</strong></span>
+                <span>v_∞: <strong className="text-[#B45309]">{(scenario.encounter.vInfSpeedMPerS / 1000).toFixed(1)} km/s</strong></span>
+                <span>PERIAPSIS: <strong className="text-[#059669]">{scenario.encounter.periapsisAltitudeKm.toLocaleString()} km</strong></span>
+                <span>PASS: <strong className="text-[#0284C7]">{scenario.encounter.passType}</strong></span>
               </div>
               <button
                 onClick={() => setIsParamsCollapsed(false)}
-                className="px-3 py-1 bg-[#1a2133] hover:bg-[#25304a] text-sky-300 rounded-xs border border-[#2d3a58] flex items-center gap-1 font-bold text-[11px] transition-colors"
+                className="px-3 py-1 bg-[#EEF2F8] hover:bg-[#E2E8F0] text-[#14426B] rounded-lg border border-[#DCE3EE] flex items-center gap-1 font-bold text-[11px] transition-colors cursor-pointer shadow-2xs"
               >
                 <Sliders size={12} /> EXPAND PARAMETERS
               </button>
@@ -623,14 +623,14 @@ export const FlybySandbox: React.FC<FlybySandboxProps> = ({
         </div>
 
         {/* Quick Link to Full Analysis Lab */}
-        <div className="w-full bg-[#0b0f1a] border border-[#1a2338] p-4 rounded-xs flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+        <div className="w-full bg-white border border-[#DCE3EE] p-4 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs font-mono shadow-xs">
           <div className="flex items-center gap-2">
-            <LineChart size={16} className="text-emerald-400" />
-            <span className="text-neutral-300">EXPLORE TRAJECTORY PLOTS, PARAMETER SWEEPS & HISTORICAL MISSIONS:</span>
+            <LineChart size={16} className="text-[#059669]" />
+            <span className="text-[#263247] font-medium">EXPLORE TRAJECTORY PLOTS, PARAMETER SWEEPS & HISTORICAL MISSIONS:</span>
           </div>
           <button
             onClick={() => setActiveTab('ANALYSIS')}
-            className="px-3 py-1.5 bg-[#18233c] hover:bg-[#223154] text-emerald-300 rounded-xs border border-emerald-500/40 font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+            className="px-3.5 py-1.5 bg-[#AEE5D0]/35 hover:bg-[#AEE5D0]/60 text-[#1D6C50] rounded-lg border border-[#AEE5D0] font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
           >
             <span>OPEN FLIGHT DYNAMICS ANALYSIS LAB</span>
             <TrendingUp size={13} />
@@ -640,30 +640,30 @@ export const FlybySandbox: React.FC<FlybySandboxProps> = ({
     ) : (
       /* 5. Analysis Area: Graphs, Comparisons & Experiments */
       <div id="flyby-analysis-lab" className="flex flex-col gap-6 pt-2">
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#0b0f1a] border border-[#1a2338] p-4 rounded-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-[#DCE3EE] p-4 rounded-xl shadow-xs">
           <div>
-            <h3 className="text-lg font-mono font-bold uppercase text-white flex items-center gap-2">
-              <LineChart size={18} className="text-emerald-400" />
+            <h3 className="text-lg font-mono font-bold uppercase text-[#263247] flex items-center gap-2">
+              <LineChart size={18} className="text-[#059669]" />
               <span>FLIGHT DYNAMICS ANALYSIS LAB & VERIFICATION</span>
             </h3>
-            <p className="text-xs text-neutral-400 font-mono">
+            <p className="text-xs text-[#68758A] font-mono">
               Real-time kinematic graphs, parameter sweeps, and archival mission comparisons.
             </p>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveTab('SIMULATION')}
-              className="px-3 py-1.5 rounded-xs border font-mono text-xs flex items-center gap-1.5 transition-colors cursor-pointer bg-[#121622] text-neutral-300 border-[#232c42] hover:text-white"
+              className="px-3 py-1.5 rounded-lg border font-mono text-xs flex items-center gap-1.5 transition-colors cursor-pointer bg-[#EEF2F8] text-[#263247] border-[#DCE3EE] hover:bg-[#E2E8F0] shadow-2xs"
             >
-              <Orbit size={13} className="text-sky-400" />
+              <Orbit size={13} className="text-[#0284C7]" />
               <span>RETURN TO 3D VIEWPORT</span>
             </button>
             <button
               onClick={() => setShowSensitivityDeck((prev) => !prev)}
-              className={`px-3 py-1.5 rounded-xs border font-mono text-xs flex items-center gap-1.5 transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg border font-mono text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs ${
                 showSensitivityDeck
-                  ? 'bg-amber-500 text-black font-bold border-amber-400'
-                  : 'bg-[#18233c] text-neutral-200 border-[#232c42] hover:text-white'
+                  ? 'bg-[#FFD2B8] text-[#7A3E1D] font-bold border-[#FFD2B8]'
+                  : 'bg-white text-[#263247] border-[#DCE3EE] hover:bg-[#EEF2F8]'
               }`}
             >
               <TrendingUp size={13} />

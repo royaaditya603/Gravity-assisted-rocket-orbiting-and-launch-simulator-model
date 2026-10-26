@@ -6,7 +6,7 @@ import {
   checkClosestApproachHazards,
 } from '../../../physics/FlybyScenario';
 import { ParameterTooltip, UnitBadge } from './ParameterTooltip';
-import { Compass, ShieldAlert, AlertTriangle, ArrowRight, Zap, Target } from 'lucide-react';
+import { Compass, ShieldAlert, AlertTriangle } from 'lucide-react';
 
 export interface FlybyGeometryControlsProps {
   planetRadiusM: number;
@@ -58,20 +58,21 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
   const handleVInfChange = (newVInfMPerS: number) => {
     const val = Math.max(100.0, newVInfMPerS);
     onChangeVInf(val);
+
     const synced = syncAltitudeAndImpactParameter(
       periapsisAltitudeKm,
       impactParameterKm,
-      distanceMode,
+      'PERIAPSIS_ALTITUDE',
       planetRadiusM,
       val,
       planetMu
     );
-    onChangePeriapsisAltitude(synced.periapsisAltitudeKm);
     onChangeImpactParameter(synced.impactParameterKm);
   };
 
   const handleAltitudeChange = (newAltKm: number) => {
     onChangePeriapsisAltitude(newAltKm);
+
     const synced = syncAltitudeAndImpactParameter(
       newAltKm,
       impactParameterKm,
@@ -84,11 +85,11 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
   };
 
   const handleImpactParameterChange = (newBKm: number) => {
-    const bSafe = Math.max(0, newBKm);
-    onChangeImpactParameter(bSafe);
+    onChangeImpactParameter(newBKm);
+
     const synced = syncAltitudeAndImpactParameter(
       periapsisAltitudeKm,
-      bSafe,
+      newBKm,
       'IMPACT_PARAMETER',
       planetRadiusM,
       vInfSpeedMPerS,
@@ -98,23 +99,23 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
   };
 
   return (
-    <div className="bg-[#0b0c13] border border-[#1f2537] p-4 rounded-xs flex flex-col gap-4 font-mono text-white">
+    <div className="flex flex-col gap-4 font-mono text-[#263247]">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1b2132] pb-2">
-        <div className="flex items-center gap-2">
-          <Compass size={14} className="text-amber-400" />
-          <span className="text-xs font-bold text-amber-300 uppercase">
-            SPACECRAFT FLYBY TRAJECTORY CONTROLS
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#DCE3EE] pb-2">
+        <div className="flex items-center gap-1.5">
+          <Compass size={14} className="text-[#0284C7]" />
+          <span className="text-[11px] font-bold text-[#263247] uppercase">
+            FLYBY ENCOUNTER GEOMETRY & TRAJECTORY PARAMETERS:
           </span>
           <ParameterTooltip
-            title="Flyby Encounter Geometry"
-            description="Controls the incoming hyperbolic excess velocity (v_∞), encounter orientation (trailing vs leading), and closest approach distance (periapsis altitude h_p or asymptotic impact parameter b)."
-            formula="b = r_p · √(1 + 2μ / (r_p · v_∞²))"
+            title="Flyby Geometry Specification"
+            description="Defines the incoming hyperbolic trajectory relative to the planet: excess speed v_inf, closest approach periapsis altitude h_p, impact parameter b, and orbital pass type."
+            formula="rp = Rp + hp,  b = rp · √(1 + 2μ / (rp · v_∞²))"
           />
         </div>
-        <div className="text-[10px] text-neutral-400">
-          Two-Body Patched Conic / Numerical Integration
-        </div>
+        <span className="text-[10px] text-[#68758A]">
+          Two-Body Patched Conic / Planar Hyperbolic Encounter
+        </span>
       </div>
 
       {/* Grid of Encounter Inputs */}
@@ -123,7 +124,7 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
-              <label className="text-neutral-400 font-bold uppercase text-[10px]">
+              <label className="text-[#68758A] font-bold uppercase text-[10px]">
                 FLYBY ORIENTATION
               </label>
               <ParameterTooltip
@@ -132,21 +133,21 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
                 formula="Trailing: +ΔV (Gain) | Leading: -ΔV (Braking)"
               />
             </div>
-            <span className="text-[9px] text-neutral-500 font-bold">PASS TYPE</span>
+            <span className="text-[9px] text-[#68758A] font-bold">PASS TYPE</span>
           </div>
 
           <div className="grid grid-cols-2 gap-1.5">
             <button
               type="button"
               onClick={() => onChangePassType('TRAILING')}
-              className={`py-2 px-2 text-[11px] font-bold rounded-xs border transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+              className={`py-2 px-2 text-[11px] font-bold rounded-xl border transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
                 passType === 'TRAILING'
-                  ? 'bg-amber-500 text-black border-amber-400 shadow-md ring-1 ring-amber-400'
-                  : 'bg-[#141724] text-neutral-400 border-[#242b3e] hover:text-white'
+                  ? 'bg-[#FFD2B8] text-[#7A3E1D] border-[#FFD2B8] shadow-xs ring-2 ring-[#FFD2B8]/60'
+                  : 'bg-[#F8FAFD] text-[#68758A] hover:bg-[#EEF2F8] border-[#DCE3EE]'
               }`}
             >
               <span>TRAILING (+ΔV)</span>
-              <span className={`text-[8px] ${passType === 'TRAILING' ? 'text-black/80' : 'text-neutral-500'}`}>
+              <span className={`text-[8px] ${passType === 'TRAILING' ? 'text-[#7A3E1D]/80' : 'text-[#68758A]'}`}>
                 ACCELERATION
               </span>
             </button>
@@ -154,20 +155,20 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
             <button
               type="button"
               onClick={() => onChangePassType('LEADING')}
-              className={`py-2 px-2 text-[11px] font-bold rounded-xs border transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+              className={`py-2 px-2 text-[11px] font-bold rounded-xl border transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
                 passType === 'LEADING'
-                  ? 'bg-rose-500 text-white border-rose-400 shadow-md ring-1 ring-rose-400'
-                  : 'bg-[#141724] text-neutral-400 border-[#242b3e] hover:text-white'
+                  ? 'bg-[#F2B9C6] text-[#83263E] border-[#F2B9C6] shadow-xs ring-2 ring-[#F2B9C6]/60'
+                  : 'bg-[#F8FAFD] text-[#68758A] hover:bg-[#EEF2F8] border-[#DCE3EE]'
               }`}
             >
               <span>LEADING (-ΔV)</span>
-              <span className={`text-[8px] ${passType === 'LEADING' ? 'text-white/80' : 'text-neutral-500'}`}>
+              <span className={`text-[8px] ${passType === 'LEADING' ? 'text-[#83263E]/80' : 'text-[#68758A]'}`}>
                 DECELERATION
               </span>
             </button>
           </div>
 
-          <span className="text-[9px] text-neutral-500 leading-tight">
+          <span className="text-[9px] text-[#68758A] leading-tight">
             {passType === 'TRAILING'
               ? 'Behind planet: pulls probe forward along orbit'
               : 'Ahead of planet: pulls probe backward against orbit'}
@@ -178,7 +179,7 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
-              <label className="text-neutral-400 font-bold uppercase text-[10px]">
+              <label className="text-[#68758A] font-bold uppercase text-[10px]">
                 ASYMPTOTIC SPEED (v_∞)
               </label>
               <ParameterTooltip
@@ -190,7 +191,7 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
             </div>
             <div className="flex items-center gap-1">
               <UnitBadge unit="km/s" />
-              <span className="text-amber-400 font-bold">{vInfKmS.toFixed(2)}</span>
+              <span className="text-[#B45309] font-bold">{vInfKmS.toFixed(2)}</span>
             </div>
           </div>
 
@@ -202,7 +203,7 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
               step="250"
               value={vInfSpeedMPerS}
               onChange={(e) => handleVInfChange(parseFloat(e.target.value))}
-              className="w-full accent-amber-500 bg-neutral-800 h-1.5 rounded-sm cursor-pointer"
+              className="w-full accent-[#0284C7] bg-[#EEF2F8] h-1.5 rounded-sm cursor-pointer"
             />
             <input
               type="number"
@@ -216,11 +217,11 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
                   handleVInfChange(val * 1000.0);
                 }
               }}
-              className="w-16 bg-[#141826] border border-[#283148] px-1.5 py-0.5 rounded-xs text-right text-amber-300 font-bold text-xs"
+              className="w-16 bg-white border border-[#DCE3EE] px-1.5 py-0.5 rounded-lg text-right text-[#14426B] font-bold text-xs shadow-2xs"
             />
           </div>
 
-          <div className="flex justify-between text-[9px] text-neutral-500">
+          <div className="flex justify-between text-[9px] text-[#68758A]">
             <span>Range: 1.0 – 35.0 km/s</span>
             <span>{(vInfSpeedMPerS).toLocaleString()} m/s</span>
           </div>
@@ -230,7 +231,7 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
-              <label className="text-neutral-400 font-bold uppercase text-[10px]">
+              <label className="text-[#68758A] font-bold uppercase text-[10px]">
                 {distanceMode === 'PERIAPSIS_ALTITUDE' ? 'CLOSEST ALTITUDE (h_p)' : 'IMPACT PARAMETER (b)'}
               </label>
               <ParameterTooltip
@@ -247,7 +248,7 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
                   distanceMode === 'PERIAPSIS_ALTITUDE' ? 'IMPACT_PARAMETER' : 'PERIAPSIS_ALTITUDE'
                 );
               }}
-              className="text-[9px] text-sky-400 hover:text-sky-300 underline font-bold cursor-pointer"
+              className="text-[9px] text-[#0284C7] hover:underline font-bold cursor-pointer"
             >
               [SWITCH TO {distanceMode === 'PERIAPSIS_ALTITUDE' ? 'b' : 'h_p'}]
             </button>
@@ -264,7 +265,7 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
                 value={periapsisAltitudeKm}
                 onChange={(e) => handleAltitudeChange(parseFloat(e.target.value))}
                 className={`w-full h-1.5 rounded-sm cursor-pointer ${
-                  hazards.isCollision ? 'accent-rose-500 bg-rose-950' : 'accent-sky-500 bg-neutral-800'
+                  hazards.isCollision ? 'accent-[#DC2626] bg-[#FEE2E2]' : 'accent-[#0284C7] bg-[#EEF2F8]'
                 }`}
               />
               <div className="flex items-center gap-1">
@@ -278,10 +279,10 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
                       handleAltitudeChange(val);
                     }
                   }}
-                  className={`w-20 bg-[#141826] border px-1.5 py-0.5 rounded-xs text-right font-bold text-xs ${
+                  className={`w-20 bg-white border px-1.5 py-0.5 rounded-lg text-right font-bold text-xs shadow-2xs ${
                     hazards.isCollision
-                      ? 'border-rose-500 text-rose-300'
-                      : 'border-[#283148] text-sky-300'
+                      ? 'border-[#FCA5A5] text-[#DC2626]'
+                      : 'border-[#DCE3EE] text-[#14426B]'
                   }`}
                 />
                 <UnitBadge unit="km" />
@@ -296,7 +297,7 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
                 step="1000"
                 value={impactParameterKm}
                 onChange={(e) => handleImpactParameterChange(parseFloat(e.target.value))}
-                className="w-full accent-sky-500 bg-neutral-800 h-1.5 rounded-sm cursor-pointer"
+                className="w-full accent-[#0284C7] bg-[#EEF2F8] h-1.5 rounded-sm cursor-pointer"
               />
               <div className="flex items-center gap-1">
                 <input
@@ -310,7 +311,7 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
                       handleImpactParameterChange(val);
                     }
                   }}
-                  className="w-20 bg-[#141826] border border-[#283148] px-1.5 py-0.5 rounded-xs text-right text-sky-300 font-bold text-xs"
+                  className="w-20 bg-white border border-[#DCE3EE] px-1.5 py-0.5 rounded-lg text-right text-[#14426B] font-bold text-xs shadow-2xs"
                 />
                 <UnitBadge unit="km" />
               </div>
@@ -318,13 +319,13 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
           )}
 
           {/* Coupling feedback display */}
-          <div className="flex justify-between items-center text-[9px] text-neutral-400">
+          <div className="flex justify-between items-center text-[9px] text-[#68758A]">
             <span>
               {distanceMode === 'PERIAPSIS_ALTITUDE'
                 ? `Derived Impact Param b: ${impactParameterKm.toFixed(0)} km`
                 : `Derived Altitude h_p: ${periapsisAltitudeKm.toFixed(0)} km`}
             </span>
-            <span className={hazards.isCollision ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
+            <span className={hazards.isCollision ? 'text-[#DC2626] font-bold' : 'text-[#059669]'}>
               r_p: {periapsisRadiusKm.toLocaleString(undefined, { maximumFractionDigits: 0 })} km
             </span>
           </div>
@@ -334,7 +335,7 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
-              <label className="text-neutral-400 font-bold uppercase text-[10px]">
+              <label className="text-[#68758A] font-bold uppercase text-[10px]">
                 APPROACH ANGLE (ψ)
               </label>
               <ParameterTooltip
@@ -345,7 +346,7 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
             </div>
             <div className="flex items-center gap-1">
               <UnitBadge unit="deg" />
-              <span className="text-amber-400 font-bold">{approachAngleDeg}°</span>
+              <span className="text-[#B45309] font-bold">{approachAngleDeg}°</span>
             </div>
           </div>
 
@@ -357,7 +358,7 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
               step="5"
               value={approachAngleDeg}
               onChange={(e) => onChangeApproachAngle(parseFloat(e.target.value))}
-              className="w-full accent-amber-500 bg-neutral-800 h-1.5 rounded-sm cursor-pointer"
+              className="w-full accent-[#0284C7] bg-[#EEF2F8] h-1.5 rounded-sm cursor-pointer"
             />
             <input
               type="number"
@@ -369,12 +370,12 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
                 const val = parseFloat(e.target.value);
                 if (!isNaN(val)) onChangeApproachAngle(val);
               }}
-              className="w-14 bg-[#141826] border border-[#283148] px-1.5 py-0.5 rounded-xs text-right text-white font-bold text-xs"
+              className="w-14 bg-white border border-[#DCE3EE] px-1.5 py-0.5 rounded-lg text-right text-[#263247] font-bold text-xs shadow-2xs"
             />
           </div>
 
-          <div className="flex items-center justify-between text-[9px] pt-0.5 border-t border-[#181d2c]">
-            <span className="text-neutral-500">Spacecraft Mass:</span>
+          <div className="flex items-center justify-between text-[9px] pt-0.5 border-t border-[#DCE3EE]">
+            <span className="text-[#68758A]">Spacecraft Mass:</span>
             <div className="flex items-center gap-1">
               <input
                 type="number"
@@ -385,7 +386,7 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
                   const m = parseFloat(e.target.value);
                   if (!isNaN(m) && m > 0) onChangeSpacecraftMass(m);
                 }}
-                className="w-16 bg-[#121522] border border-[#252c40] px-1 py-0.5 rounded-xs text-right text-neutral-300 text-[10px]"
+                className="w-16 bg-white border border-[#DCE3EE] px-1 py-0.5 rounded-lg text-right text-[#263247] text-[10px] shadow-2xs"
               />
               <UnitBadge unit="kg" />
             </div>
@@ -395,10 +396,10 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
 
       {/* Surface Collision & Hazard Banners */}
       {hazards.isCollision && (
-        <div className="p-3 bg-rose-950/70 border border-rose-600/70 rounded-xs flex items-center gap-2.5 text-rose-200 text-xs">
-          <ShieldAlert size={18} className="text-rose-400 flex-shrink-0" />
+        <div className="p-3 bg-[#FEE2E2] border border-[#FCA5A5] rounded-xl flex items-center gap-2.5 text-[#991B1B] text-xs shadow-2xs">
+          <ShieldAlert size={18} className="text-[#DC2626] flex-shrink-0" />
           <div className="flex flex-col">
-            <span className="font-bold text-rose-300">
+            <span className="font-bold text-[#991B1B]">
               DIRECT SURFACE COLLISION HAZARD:
             </span>
             <span className="text-[11px] leading-relaxed">
@@ -410,10 +411,10 @@ export const FlybyGeometryControls: React.FC<FlybyGeometryControlsProps> = ({
       )}
 
       {!hazards.isCollision && hazards.isUnrealisticClosestApproach && (
-        <div className="p-2.5 bg-amber-950/60 border border-amber-600/60 rounded-xs flex items-center gap-2 text-amber-200 text-xs">
-          <AlertTriangle size={16} className="text-amber-400 flex-shrink-0" />
+        <div className="p-2.5 bg-[#FEF3C7] border border-[#FCD34D] rounded-xl flex items-center gap-2 text-[#92400E] text-xs shadow-2xs">
+          <AlertTriangle size={16} className="text-[#D97706] flex-shrink-0" />
           <div className="flex flex-col">
-            <span className="font-bold text-amber-300">
+            <span className="font-bold text-[#92400E]">
               ATMOSPHERIC GRAZING / TIDAL HAZARD:
             </span>
             <span className="text-[11px] leading-relaxed">

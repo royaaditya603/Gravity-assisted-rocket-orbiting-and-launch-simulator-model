@@ -84,6 +84,40 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
   const [showEquatorialGrid, setShowEquatorialGrid] = useState<boolean>(initialShowGrid);
   const [showPeriMarker, setShowPeriMarker] = useState<boolean>(initialShowPeriMarker);
 
+  // Synchronize dynamic props with refs to prevent destroying the Three.js scene
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
+
+  const playbackSpeedRef = useRef(playbackSpeed);
+  playbackSpeedRef.current = playbackSpeed;
+
+  const cameraModeRef = useRef(cameraMode);
+  cameraModeRef.current = cameraMode;
+
+  const referenceFrameRef = useRef(referenceFrame);
+  referenceFrameRef.current = referenceFrame;
+
+  const showVectorsRef = useRef(showVectors);
+  showVectorsRef.current = showVectors;
+
+  const showGravityVectorRef = useRef(showGravityVector);
+  showGravityVectorRef.current = showGravityVector;
+
+  const showTrajectoryTrailRef = useRef(showTrajectoryTrail);
+  showTrajectoryTrailRef.current = showTrajectoryTrail;
+
+  const attitudeModeRef = useRef(attitudeMode);
+  attitudeModeRef.current = attitudeMode;
+
+  const reducedMotionRef = useRef(reducedMotion);
+  reducedMotionRef.current = reducedMotion;
+
+  const simResultRef = useRef(simResult);
+  simResultRef.current = simResult;
+
+  const onPlaybackIndexChangeRef = useRef(onPlaybackIndexChange);
+  onPlaybackIndexChangeRef.current = onPlaybackIndexChange;
+
   // High-Precision Hermite Interpolator
   const interpolatorRef = useRef<TrajectoryInterpolator | null>(null);
   useEffect(() => {
@@ -112,10 +146,14 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
   const closestMarkerRef = useRef<THREE.Mesh | null>(null);
   const impactMarkerRef = useRef<THREE.Group | null>(null);
   const impactLineRef = useRef<THREE.Line | null>(null);
-  const vectorsGroupRef = useRef<THREE.Group | null>(null);
   const gridHelperRef = useRef<THREE.GridHelper | null>(null);
   const surfaceRingRef = useRef<THREE.Mesh | null>(null);
   const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
+
+  // Persistent Arrow Helpers (zero GC allocations per frame)
+  const velArrowRef = useRef<THREE.ArrowHelper | null>(null);
+  const planetVelArrowRef = useRef<THREE.ArrowHelper | null>(null);
+  const gravityArrowRef = useRef<THREE.ArrowHelper | null>(null);
 
   // Precomputed all points in scene coordinates
   const allScenePointsRef = useRef<THREE.Vector3[]>([]);
@@ -124,14 +162,17 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
   // Continuous Playback Time in Seconds
   const currentTimeSRef = useRef<number>(0);
   const lastSyncTimeRef = useRef<number>(0);
+  const isSeekingExternalRef = useRef<boolean>(false);
 
   // Sync internal continuous time when currentPlaybackIndex is changed from outside (seeking/reset)
   useEffect(() => {
     if (simResult && simResult.trajectory.length > 0) {
       const idx = Math.min(currentPlaybackIndex, simResult.trajectory.length - 1);
       const targetTimeS = simResult.trajectory[idx].timeS;
-      if (Math.abs(currentTimeSRef.current - targetTimeS) > 0.2) {
+      // Only snap if outside normal continuous playback range to avoid jitter
+      if (Math.abs(currentTimeSRef.current - targetTimeS) > 1.2 || !isPlayingRef.current) {
         currentTimeSRef.current = targetTimeS;
+        lastDrawnIdxRef.current = -1;
       }
     }
   }, [currentPlaybackIndex, simResult]);
@@ -140,13 +181,13 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
   const isMouseDownRef = useRef(false);
   const isPanningRef = useRef(false);
   const mousePosRef = useRef({ x: 0, y: 0 });
-  const cameraSphericalRef = useRef({ radius: 38, theta: Math.PI / 4, phi: Math.PI / 3 });
+  const cameraSphericalRef = useRef({ radius: 42, theta: Math.PI / 4, phi: Math.PI / 3 });
   const currentLookAtRef = useRef(new THREE.Vector3(0, 0, 0));
   const targetLookAtRef = useRef(new THREE.Vector3(0, 0, 0));
 
   // Reset camera
   const handleResetCamera = useCallback(() => {
-    cameraSphericalRef.current = { radius: 38, theta: Math.PI / 4, phi: Math.PI / 3 };
+    cameraSphericalRef.current = { radius: 42, theta: Math.PI / 4, phi: Math.PI / 3 };
     targetLookAtRef.current.set(0, 0, 0);
     if (onCameraChange) onCameraChange('OVERVIEW');
   }, [onCameraChange]);
@@ -160,13 +201,14 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
     cameraSphericalRef.current.radius = Math.min(220.0, cameraSphericalRef.current.radius + 5.0);
   }, []);
 
-  // --- 1. SETUP THREE.JS SCENE & RENDERER ---
+  // --- 1. SETUP THREE.JS SCENE & RENDERER (MOUNT ONCE) ---
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x040508);
+    // Soft celestial deep slate background (pastel space palette)
+    scene.background = new THREE.Color(0x141a29);
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(
@@ -175,14 +217,14 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
       0.1,
       3000
     );
-    camera.position.set(28, 22, 28);
+    camera.position.set(30, 24, 30);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({
-        antialias: quality !== 'PERFORMANCE',
+        antialias: true,
         alpha: false,
         powerPreference: 'high-performance',
       });
@@ -196,7 +238,7 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
     const dprLimit = quality === 'HIGH' ? 2.0 : quality === 'BALANCED' ? 1.5 : 1.0;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, dprLimit));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.25;
+    renderer.toneMappingExposure = 1.15;
 
     const onContextLost = (e: Event) => {
       e.preventDefault();
@@ -208,19 +250,19 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // Direct Sun Lighting
+    // Direct Sun Lighting (balanced key illumination)
     const sunLightDirection = new THREE.Vector3(1.2, 0.45, 0.85).normalize();
-    const sunLight = new THREE.DirectionalLight(0xfffaec, 2.7);
+    const sunLight = new THREE.DirectionalLight(0xfff8ee, 2.6);
     sunLight.position.copy(sunLightDirection.clone().multiplyScalar(150));
     scene.add(sunLight);
     sunLightRef.current = sunLight;
 
-    // Ambient Fill
-    const ambientLight = new THREE.AmbientLight(0x182032, 0.75);
+    // Softer ambient fill light to prevent harsh unlit blackness
+    const ambientLight = new THREE.AmbientLight(0x28364f, 0.95);
     scene.add(ambientLight);
 
-    // Starfield Skybox
-    const starCount = quality === 'HIGH' ? 1800 : quality === 'BALANCED' ? 1100 : 600;
+    // Starfield Skybox with subtle low-contrast stars
+    const starCount = 1200;
     const starGeo = new THREE.BufferGeometry();
     const starPos = new Float32Array(starCount * 3);
     for (let i = 0; i < starCount * 3; i += 3) {
@@ -233,14 +275,16 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
     }
     starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
     const starMat = new THREE.PointsMaterial({
-      color: 0x99aacc,
-      size: 1.5,
+      color: 0x94a9c9,
+      size: 1.4,
+      transparent: true,
+      opacity: 0.45,
       sizeAttenuation: false,
     });
     scene.add(new THREE.Points(starGeo, starMat));
 
-    // Reference Equatorial Orbital Plane Grid
-    const grid = new THREE.GridHelper(80, 40, 0x263045, 0x121622);
+    // Reference Equatorial Orbital Plane Grid (Soft pastel slate styling)
+    const grid = new THREE.GridHelper(80, 40, 0x2e3a52, 0x1a2233);
     grid.position.y = 0;
     scene.add(grid);
     gridHelperRef.current = grid;
@@ -248,24 +292,62 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
     // Visible Physical Surface Radius Boundary Ring (R_planet = 4.0 scene units)
     const surfaceRingGeo = new THREE.RingGeometry(3.96, 4.04, 64);
     const surfaceRingMat = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
+      color: 0x7bb6e8,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.5,
     });
     const surfaceRing = new THREE.Mesh(surfaceRingGeo, surfaceRingMat);
     surfaceRing.rotation.x = Math.PI / 2;
     scene.add(surfaceRing);
     surfaceRingRef.current = surfaceRing;
 
-    // Vectors Group
+    // Persistent Vector Arrows Group
     const vectorsGroup = new THREE.Group();
     scene.add(vectorsGroup);
-    vectorsGroupRef.current = vectorsGroup;
 
-    // Closest Approach Periapsis Marker
+    // 1. Spacecraft Velocity Arrow (Pastel Mint)
+    const velArrow = new THREE.ArrowHelper(
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(0, 0, 0),
+      1.0,
+      0x5dd39e,
+      0.45,
+      0.22
+    );
+    velArrow.visible = false;
+    vectorsGroup.add(velArrow);
+    velArrowRef.current = velArrow;
+
+    // 2. Planet Orbital Velocity Arrow (Pastel Peach)
+    const planetVelArrow = new THREE.ArrowHelper(
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(0, 0, 0),
+      1.0,
+      0xfbb073,
+      0.5,
+      0.25
+    );
+    planetVelArrow.visible = false;
+    vectorsGroup.add(planetVelArrow);
+    planetVelArrowRef.current = planetVelArrow;
+
+    // 3. Gravitational Acceleration Arrow (Pastel Lavender)
+    const gravityArrow = new THREE.ArrowHelper(
+      new THREE.Vector3(0, -1, 0),
+      new THREE.Vector3(0, 0, 0),
+      1.0,
+      0xb39ddb,
+      0.42,
+      0.2
+    );
+    gravityArrow.visible = false;
+    vectorsGroup.add(gravityArrow);
+    gravityArrowRef.current = gravityArrow;
+
+    // Closest Approach Periapsis Marker (Pastel Mint Torus)
     const markerGeo = new THREE.TorusGeometry(0.65, 0.05, 16, 32);
-    const markerMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+    const markerMat = new THREE.MeshBasicMaterial({ color: 0x48cfad });
     const marker = new THREE.Mesh(markerGeo, markerMat);
     marker.rotation.x = Math.PI / 2;
     marker.visible = false;
@@ -276,11 +358,11 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
     const impactGroup = new THREE.Group();
     const impactCore = new THREE.Mesh(
       new THREE.SphereGeometry(0.35, 16, 16),
-      new THREE.MeshBasicMaterial({ color: 0xef4444 })
+      new THREE.MeshBasicMaterial({ color: 0xf28b82 })
     );
     const impactRing = new THREE.Mesh(
       new THREE.RingGeometry(0.4, 0.75, 32),
-      new THREE.MeshBasicMaterial({ color: 0xff0033, side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ color: 0xf87171, side: THREE.DoubleSide })
     );
     impactRing.rotation.x = Math.PI / 2;
     impactGroup.add(impactCore);
@@ -291,9 +373,9 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
 
     // High-Fidelity Spacecraft (Probe or Launch Vehicle)
     const scBundle = SpacecraftVisuals.create(1.0, spacecraftModel);
-    // Add distinct high-visibility beacon marker so spacecraft is recognizable at all zoom levels
-    const beaconGeo = new THREE.OctahedronGeometry(0.4);
-    const beaconMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true });
+    // Distinct high-visibility beacon wireframe marker
+    const beaconGeo = new THREE.OctahedronGeometry(0.42);
+    const beaconMat = new THREE.MeshBasicMaterial({ color: 0x7bb6e8, wireframe: true });
     const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
     scBundle.group.add(beaconMesh);
 
@@ -314,7 +396,6 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
       mousePosRef.current = { x: e.clientX, y: e.clientY };
 
       if (isPanningRef.current) {
-        // Pan camera lookAt target along screen plane
         const { radius, theta, phi } = cameraSphericalRef.current;
         const panSpeed = 0.0012 * radius;
         const right = new THREE.Vector3(Math.cos(theta), 0, -Math.sin(theta));
@@ -327,7 +408,6 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
 
         const panDelta = right.clone().multiplyScalar(-dx * panSpeed).add(up.clone().multiplyScalar(dy * panSpeed));
         targetLookAtRef.current.add(panDelta);
-        if (onCameraChange) onCameraChange('FREE');
       } else {
         cameraSphericalRef.current.theta -= dx * 0.0065;
         cameraSphericalRef.current.phi = Math.max(
@@ -376,37 +456,38 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
     let lastTime = performance.now();
     const animate = (time: number) => {
       animFrameIdRef.current = requestAnimationFrame(animate);
-      const dt = Math.min(0.1, (time - lastTime) * 0.001);
+      const dt = Math.min(0.066, (time - lastTime) * 0.001);
       lastTime = time;
 
       const interpolator = interpolatorRef.current;
-      const isSunFrame = referenceFrame === 'HELIOCENTRIC';
-      const planetData = simResult?.config.planet;
+      const activeSim = simResultRef.current;
+      const isSunFrame = referenceFrameRef.current === 'HELIOCENTRIC';
+      const planetData = activeSim?.config.planet;
       const toSceneScale = planetData ? VISUAL_PLANET_RADIUS / planetData.radiusM : 1e-6;
 
       // 1. Advance Simulation Clock if playing
-      if (isPlaying && interpolator && simResult) {
+      if (isPlayingRef.current && interpolator && activeSim) {
         const totalDuration = interpolator.getTotalDurationS();
-        const timeAdvance = (totalDuration / 22.0) * playbackSpeed * dt;
+        const timeAdvance = (totalDuration / 22.0) * playbackSpeedRef.current * dt;
         currentTimeSRef.current += timeAdvance;
 
         if (currentTimeSRef.current >= totalDuration) {
-          if (simResult.collisionDetected) {
-            currentTimeSRef.current = simResult.collisionTimeS ?? totalDuration;
+          if (activeSim.collisionDetected) {
+            currentTimeSRef.current = activeSim.collisionTimeS ?? totalDuration;
           } else {
             currentTimeSRef.current = 0;
           }
         }
 
         // Throttled synchronization back to React HUD / charts (~25 Hz)
-        if (time - lastSyncTimeRef.current > 40 && onPlaybackIndexChange) {
+        if (time - lastSyncTimeRef.current > 40 && onPlaybackIndexChangeRef.current) {
           lastSyncTimeRef.current = time;
           const progress = Math.max(0, Math.min(1, currentTimeSRef.current / Math.max(1, totalDuration)));
           const targetIndex = Math.min(
-            simResult.trajectory.length - 1,
-            Math.floor(progress * (simResult.trajectory.length - 1))
+            activeSim.trajectory.length - 1,
+            Math.floor(progress * (activeSim.trajectory.length - 1))
           );
-          onPlaybackIndexChange(targetIndex);
+          onPlaybackIndexChangeRef.current(targetIndex);
         }
       }
 
@@ -414,11 +495,11 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
       let currentPosScene = new THREE.Vector3(0, 0, 0);
       let currentVelScene = new THREE.Vector3(0, 0, 0);
 
-      if (interpolator && simResult) {
+      if (interpolator && activeSim) {
         const state: InterpolatedState = interpolator.evaluateAtTime(currentTimeSRef.current);
 
         if (isSunFrame) {
-          const originPlanet = simResult.trajectory[0].planetPosSunM;
+          const originPlanet = activeSim.trajectory[0].planetPosSunM;
           currentPosScene.set(
             (state.posSunM.x - originPlanet.x) * toSceneScale,
             0,
@@ -426,13 +507,11 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
           );
           currentVelScene.set(state.velSunM.x, 0, state.velSunM.y);
 
-          // In Sun frame, planet moves along its heliocentric orbit
           if (planetBundleRef.current) {
             const pX = (state.planetPosSunM.x - originPlanet.x) * toSceneScale;
             const pZ = (state.planetPosSunM.y - originPlanet.y) * toSceneScale;
             planetBundleRef.current.group.position.set(pX, 0, pZ);
 
-            // Position equatorial grid and surface ring centered on moving planet
             if (gridHelperRef.current) {
               gridHelperRef.current.position.set(pX, 0, pZ);
             }
@@ -455,33 +534,32 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
           }
         }
 
-        // Update Spacecraft Probe transforms smoothly with Quaternion SLERP
+        // Update Spacecraft transforms smoothly with Quaternion SLERP
         if (spacecraftBundleRef.current) {
           const sunPos = new THREE.Vector3(100, 40, 80);
           spacecraftBundleRef.current.update(
             currentPosScene,
             currentVelScene,
             sunPos,
-            attitudeMode,
+            attitudeModeRef.current,
             dt
           );
         }
 
-        // Dynamic Split Trajectory Trail Update (Past vs Predicted Future)
-        if (showTrajectoryTrail && allScenePointsRef.current.length > 0) {
+        // Smooth Trajectory Trail Update (Past vs Predicted Future)
+        if (showTrajectoryTrailRef.current && allScenePointsRef.current.length > 0) {
           const allPts = allScenePointsRef.current;
           const totalDuration = interpolator.getTotalDurationS();
           const progress = Math.max(0, Math.min(1, currentTimeSRef.current / Math.max(1, totalDuration)));
           const curIdx = Math.min(allPts.length - 1, Math.floor(progress * (allPts.length - 1)));
 
+          if (pastLineRef.current) {
+            const pastPts = [...allPts.slice(0, curIdx + 1), currentPosScene];
+            pastLineRef.current.geometry.setFromPoints(pastPts);
+          }
+
           if (curIdx !== lastDrawnIdxRef.current) {
             lastDrawnIdxRef.current = curIdx;
-
-            if (pastLineRef.current) {
-              const pastPts = [...allPts.slice(0, curIdx + 1), currentPosScene];
-              pastLineRef.current.geometry.setFromPoints(pastPts);
-            }
-
             if (futureLineRef.current) {
               const futurePts = [currentPosScene, ...allPts.slice(curIdx + 1)];
               futureLineRef.current.geometry.setFromPoints(futurePts);
@@ -490,51 +568,41 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
           }
         }
 
-        // Update Dynamic Vector Arrows
-        const vecGroup = vectorsGroupRef.current;
-        if (vecGroup) {
-          while (vecGroup.children.length > 0) {
-            vecGroup.remove(vecGroup.children[0]);
+        // Update Dynamic Vector Arrows without re-allocation
+        if (showVectorsRef.current) {
+          const vScale = 0.0006;
+          const vLen = currentVelScene.length() * vScale;
+          if (velArrowRef.current) {
+            if (vLen > 0.15) {
+              velArrowRef.current.setDirection(currentVelScene.clone().normalize());
+              velArrowRef.current.setLength(vLen, 0.45, 0.22);
+              velArrowRef.current.position.copy(currentPosScene).add(new THREE.Vector3(0, 0.2, 0));
+              velArrowRef.current.visible = true;
+            } else {
+              velArrowRef.current.visible = false;
+            }
           }
 
-          if (showVectors) {
-            const vScale = 0.0006;
-            // 1. Current Spacecraft Velocity (Emerald: v_rel or v_sun)
-            const vLen = currentVelScene.length() * vScale;
-            if (vLen > 0.15) {
-              const vDir = currentVelScene.clone().normalize();
-              const arrow = new THREE.ArrowHelper(
-                vDir,
-                currentPosScene.clone().add(new THREE.Vector3(0, 0.2, 0)),
-                vLen,
-                0x10b981,
-                0.45,
-                0.22
-              );
-              vecGroup.add(arrow);
-            }
-
-            // 2. In Sun Frame: Planet's orbital velocity vector V_p (Amber/Gold)
+          if (planetVelArrowRef.current) {
             if (isSunFrame && planetBundleRef.current) {
               const pPos = planetBundleRef.current.group.position.clone();
               const pVel = new THREE.Vector3(state.planetVelSunM.x, 0, state.planetVelSunM.y);
               const pVelLen = pVel.length() * vScale;
               if (pVelLen > 0.15) {
-                const pDir = pVel.clone().normalize();
-                const pArrow = new THREE.ArrowHelper(
-                  pDir,
-                  pPos.clone().add(new THREE.Vector3(0, 0.35, 0)),
-                  pVelLen,
-                  0xf59e0b,
-                  0.55,
-                  0.28
-                );
-                vecGroup.add(pArrow);
+                planetVelArrowRef.current.setDirection(pVel.clone().normalize());
+                planetVelArrowRef.current.setLength(pVelLen, 0.5, 0.25);
+                planetVelArrowRef.current.position.copy(pPos).add(new THREE.Vector3(0, 0.35, 0));
+                planetVelArrowRef.current.visible = true;
+              } else {
+                planetVelArrowRef.current.visible = false;
               }
+            } else {
+              planetVelArrowRef.current.visible = false;
             }
+          }
 
-            // 3. Gravitational Acceleration (Purple: pointing to planet center)
-            if (showGravityVector) {
+          if (gravityArrowRef.current) {
+            if (showGravityVectorRef.current) {
               const planetPos = isSunFrame && planetBundleRef.current
                 ? planetBundleRef.current.group.position
                 : new THREE.Vector3(0, 0, 0);
@@ -544,18 +612,21 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
                 const gDir = toPlanet.clone().normalize();
                 const gMag = state.gravitationalAccelerationMPerS2;
                 const gLen = Math.max(0.6, Math.min(4.5, Math.sqrt(gMag) * 0.42));
-                const gArrow = new THREE.ArrowHelper(
-                  gDir,
-                  currentPosScene.clone().add(new THREE.Vector3(0, 0.25, 0)),
-                  gLen,
-                  0xa855f7,
-                  0.42,
-                  0.2
-                );
-                vecGroup.add(gArrow);
+                gravityArrowRef.current.setDirection(gDir);
+                gravityArrowRef.current.setLength(gLen, 0.42, 0.2);
+                gravityArrowRef.current.position.copy(currentPosScene).add(new THREE.Vector3(0, 0.25, 0));
+                gravityArrowRef.current.visible = true;
+              } else {
+                gravityArrowRef.current.visible = false;
               }
+            } else {
+              gravityArrowRef.current.visible = false;
             }
           }
+        } else {
+          if (velArrowRef.current) velArrowRef.current.visible = false;
+          if (planetVelArrowRef.current) planetVelArrowRef.current.visible = false;
+          if (gravityArrowRef.current) gravityArrowRef.current.visible = false;
         }
       }
 
@@ -564,38 +635,68 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
         planetBundleRef.current.update(currentTimeSRef.current, dt);
       }
 
-      // 4. Smooth Camera Motion
+      // 4. Stable Camera Motion (Zero Jitter / Zero Vibration)
       const cam = cameraRef.current;
       if (cam) {
-        if (cameraMode === 'PROBE_FOLLOW') {
-          targetLookAtRef.current.copy(currentPosScene);
-          cameraSphericalRef.current.radius = Math.max(9.0, cameraSphericalRef.current.radius);
-        } else if (cameraMode === 'CLOSE_UP' && simResult) {
-          const ca = simResult.closestApproach;
+        const mode = cameraModeRef.current;
+        const { radius, theta, phi } = cameraSphericalRef.current;
+
+        if (mode === 'PROBE_FOLLOW') {
+          // Rigidly and critically-damped lock to spacecraft without dual-lag oscillation
+          const desiredX = currentPosScene.x + radius * Math.sin(phi) * Math.sin(theta);
+          const desiredY = currentPosScene.y + radius * Math.cos(phi);
+          const desiredZ = currentPosScene.z + radius * Math.sin(phi) * Math.cos(theta);
+
+          if (reducedMotionRef.current) {
+            cam.position.set(desiredX, desiredY, desiredZ);
+            currentLookAtRef.current.copy(currentPosScene);
+          } else {
+            const trackRate = Math.min(1.0, dt * 14.0);
+            cam.position.lerp(new THREE.Vector3(desiredX, desiredY, desiredZ), trackRate);
+            currentLookAtRef.current.lerp(currentPosScene, trackRate);
+          }
+          cam.lookAt(currentLookAtRef.current);
+        } else if (mode === 'CLOSE_UP' && activeSim) {
+          const ca = activeSim.closestApproach;
           const caX = isSunFrame ? currentPosScene.x : ca.positionPlanetM.x * toSceneScale;
           const caZ = isSunFrame ? currentPosScene.z : ca.positionPlanetM.y * toSceneScale;
           targetLookAtRef.current.set(caX, 0, caZ);
-          cameraSphericalRef.current.radius = 14.0;
-        } else if (cameraMode === 'OVERVIEW') {
+
+          const desiredX = caX + radius * Math.sin(phi) * Math.sin(theta);
+          const desiredY = radius * Math.cos(phi);
+          const desiredZ = caZ + radius * Math.sin(phi) * Math.cos(theta);
+
+          if (reducedMotionRef.current) {
+            cam.position.set(desiredX, desiredY, desiredZ);
+            currentLookAtRef.current.copy(targetLookAtRef.current);
+          } else {
+            cam.position.lerp(new THREE.Vector3(desiredX, desiredY, desiredZ), Math.min(1.0, dt * 8.0));
+            currentLookAtRef.current.lerp(targetLookAtRef.current, Math.min(1.0, dt * 8.0));
+          }
+          cam.lookAt(currentLookAtRef.current);
+        } else if (mode === 'OVERVIEW') {
           targetLookAtRef.current.set(0, 0, 0);
-          cameraSphericalRef.current.radius = 48.0;
-        }
+          const desiredX = radius * Math.sin(phi) * Math.sin(theta);
+          const desiredY = radius * Math.cos(phi);
+          const desiredZ = radius * Math.sin(phi) * Math.cos(theta);
 
-        const lookAtRate = reducedMotion ? 1.0 : Math.min(1.0, dt * 10.0);
-        currentLookAtRef.current.lerp(targetLookAtRef.current, lookAtRate);
-
-        const { radius, theta, phi } = cameraSphericalRef.current;
-        const target = currentLookAtRef.current;
-        const desiredX = target.x + radius * Math.sin(phi) * Math.sin(theta);
-        const desiredY = target.y + radius * Math.cos(phi);
-        const desiredZ = target.z + radius * Math.sin(phi) * Math.cos(theta);
-
-        if (reducedMotion) {
-          cam.position.set(desiredX, desiredY, desiredZ);
+          if (reducedMotionRef.current) {
+            cam.position.set(desiredX, desiredY, desiredZ);
+            currentLookAtRef.current.set(0, 0, 0);
+          } else {
+            cam.position.lerp(new THREE.Vector3(desiredX, desiredY, desiredZ), Math.min(1.0, dt * 8.0));
+            currentLookAtRef.current.lerp(targetLookAtRef.current, Math.min(1.0, dt * 8.0));
+          }
+          cam.lookAt(currentLookAtRef.current);
         } else {
-          cam.position.lerp(new THREE.Vector3(desiredX, desiredY, desiredZ), Math.min(1.0, dt * 8.0));
+          // FREE camera mode
+          const target = currentLookAtRef.current;
+          const desiredX = target.x + radius * Math.sin(phi) * Math.sin(theta);
+          const desiredY = target.y + radius * Math.cos(phi);
+          const desiredZ = target.z + radius * Math.sin(phi) * Math.cos(theta);
+          cam.position.set(desiredX, desiredY, desiredZ);
+          cam.lookAt(target);
         }
-        cam.lookAt(target);
       }
 
       renderer.render(scene, camera);
@@ -612,12 +713,13 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
       window.removeEventListener('mouseup', onMouseUp);
       container.removeEventListener('wheel', onWheel);
       container.removeEventListener('contextmenu', onContextMenu);
+      if (planetBundleRef.current) planetBundleRef.current.dispose();
       if (spacecraftBundleRef.current) spacecraftBundleRef.current.dispose();
       renderer.dispose();
     };
-  }, [quality, attitudeMode, referenceFrame, isPlaying, playbackSpeed, showVectors, showGravityVector, cameraMode]);
+  }, []); // Mounts once and runs continuously without teardown
 
-  // Update Grid Visibility
+  // Update Grid Visibility dynamically
   useEffect(() => {
     if (gridHelperRef.current) {
       gridHelperRef.current.visible = showEquatorialGrid;
@@ -627,23 +729,10 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
   // Planet identity for stable visual bundle updates
   const planetKey = useMemo(() => {
     if (!simResult?.config.planet) return undefined;
-    if (webGlError) {
-    return (
-      <WebGLFallbackDisplay
-        simResult={simResult}
-        currentPlaybackIndex={currentPlaybackIndex}
-        referenceFrame={referenceFrame}
-        errorMessage={webGlError}
-        onRetry={() => setWebGlError(null)}
-        heightClass={heightClass}
-      />
-    );
-  }
-
-  return ('id' in simResult.config.planet && (simResult.config.planet as any).id) || simResult.config.planet.name;
+    return ('id' in simResult.config.planet && (simResult.config.planet as any).id) || simResult.config.planet.name;
   }, [simResult?.config.planet]);
 
-  // Update Planet Mesh (When planet changes)
+  // Update Planet Mesh when selected planet configuration changes
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene || !simResult) return;
@@ -667,7 +756,6 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
     const scene = sceneRef.current;
     if (!scene || !simResult || simResult.trajectory.length === 0) return;
 
-    // Clean up existing lines
     if (pastLineRef.current) {
       scene.remove(pastLineRef.current);
       pastLineRef.current.geometry.dispose();
@@ -704,20 +792,20 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
     allScenePointsRef.current = points;
     lastDrawnIdxRef.current = -1;
 
-    // 1. Past Trajectory (Solid Line, High Contrast)
+    // 1. Past Trajectory (Pastel Sky Blue, Solid)
     const pastGeo = new THREE.BufferGeometry().setFromPoints(points.slice(0, 2));
     const pastMat = new THREE.LineBasicMaterial({
-      color: simResult.collisionDetected ? 0xef4444 : 0x38bdf8,
+      color: simResult.collisionDetected ? 0xf87171 : 0x7bb6e8,
       linewidth: 2,
     });
     const pastLine = new THREE.Line(pastGeo, pastMat);
     scene.add(pastLine);
     pastLineRef.current = pastLine;
 
-    // 2. Predicted Future Trajectory (Dashed Muted Line)
+    // 2. Predicted Future Trajectory (Pastel Lavender, Dashed)
     const futureGeo = new THREE.BufferGeometry().setFromPoints(points);
     const futureMat = new THREE.LineDashedMaterial({
-      color: simResult.collisionDetected ? 0xf87171 : 0x7dd3fc,
+      color: simResult.collisionDetected ? 0xfca5a5 : 0xbba7eb,
       dashSize: 0.8,
       gapSize: 0.4,
       transparent: true,
@@ -748,7 +836,7 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
     if (surfaceRingRef.current) {
       const mat = surfaceRingRef.current.material as THREE.MeshBasicMaterial;
       if (mat) {
-        mat.color.setHex(simResult.collisionDetected ? 0xef4444 : 0x38bdf8);
+        mat.color.setHex(simResult.collisionDetected ? 0xf87171 : 0x7bb6e8);
       }
     }
 
@@ -779,7 +867,7 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
         ),
       ];
       const impGeo = new THREE.BufferGeometry().setFromPoints(impactPts);
-      const impMat = new THREE.LineDashedMaterial({ color: 0xf59e0b, dashSize: 0.5, gapSize: 0.3 });
+      const impMat = new THREE.LineDashedMaterial({ color: 0xfbb073, dashSize: 0.5, gapSize: 0.3 });
       const impLine = new THREE.Line(impGeo, impMat);
       impLine.computeLineDistances();
       scene.add(impLine);
@@ -801,24 +889,24 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
   }
 
   return (
-    <div className={`relative w-full ${heightClass} bg-[#040508] rounded-xs border border-[#1b2032] overflow-hidden select-none`}>
+    <div className={`relative w-full ${heightClass} bg-[#141a29] rounded-xl border border-[#DCE3EE] shadow-sm overflow-hidden select-none`}>
       {/* Three.js Container */}
       <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
-      {/* Frame / Viewport Title Banner (if provided) */}
+      {/* Frame / Viewport Title Banner */}
       {title && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-[#090b12]/90 border border-[#252f48] px-3 py-1 rounded-xs backdrop-blur-sm z-10 text-[11px] font-mono font-bold tracking-wider text-neutral-200">
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-white/90 border border-[#DCE3EE] px-3.5 py-1 rounded-full backdrop-blur-md z-10 text-[11px] font-mono font-bold tracking-wider text-[#263247] shadow-sm">
           {title}
         </div>
       )}
 
-      {/* Top-Right Viewport Controls */}
+      {/* Top-Right Viewport Controls (Pastel UI buttons) */}
       <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10 font-mono text-[11px]">
         {/* Reset Camera */}
         <button
           onClick={handleResetCamera}
           title="Reset Camera (Overview)"
-          className="p-1.5 bg-[#0e121d]/90 hover:bg-[#1a2133] text-neutral-300 hover:text-white rounded-xs border border-[#252f48] backdrop-blur-sm transition-colors shadow-sm"
+          className="p-2 bg-white/90 hover:bg-[#EEF2F8] text-[#263247] hover:text-[#1E293B] rounded-lg border border-[#DCE3EE] backdrop-blur-md transition-colors shadow-xs cursor-pointer"
         >
           <RotateCcw size={14} />
         </button>
@@ -827,7 +915,7 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
         <button
           onClick={handleZoomIn}
           title="Zoom In"
-          className="p-1.5 bg-[#0e121d]/90 hover:bg-[#1a2133] text-neutral-300 hover:text-white rounded-xs border border-[#252f48] backdrop-blur-sm transition-colors shadow-sm"
+          className="p-2 bg-white/90 hover:bg-[#EEF2F8] text-[#263247] hover:text-[#1E293B] rounded-lg border border-[#DCE3EE] backdrop-blur-md transition-colors shadow-xs cursor-pointer"
         >
           <ZoomIn size={14} />
         </button>
@@ -836,7 +924,7 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
         <button
           onClick={handleZoomOut}
           title="Zoom Out"
-          className="p-1.5 bg-[#0e121d]/90 hover:bg-[#1a2133] text-neutral-300 hover:text-white rounded-xs border border-[#252f48] backdrop-blur-sm transition-colors shadow-sm"
+          className="p-2 bg-white/90 hover:bg-[#EEF2F8] text-[#263247] hover:text-[#1E293B] rounded-lg border border-[#DCE3EE] backdrop-blur-md transition-colors shadow-xs cursor-pointer"
         >
           <ZoomOut size={14} />
         </button>
@@ -849,10 +937,10 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
             }
           }}
           title="Follow Spacecraft Camera"
-          className={`p-1.5 rounded-xs border backdrop-blur-sm transition-colors shadow-sm ${
+          className={`p-2 rounded-lg border backdrop-blur-md transition-colors shadow-xs cursor-pointer ${
             cameraMode === 'PROBE_FOLLOW'
-              ? 'bg-sky-500/20 text-sky-300 border-sky-500/60'
-              : 'bg-[#0e121d]/90 text-neutral-400 border-[#252f48]'
+              ? 'bg-[#A9D4F5]/30 text-[#1E5F8A] border-[#A9D4F5] font-bold'
+              : 'bg-white/90 text-[#68758A] border-[#DCE3EE] hover:text-[#263247] hover:bg-[#EEF2F8]'
           }`}
         >
           <Crosshair size={14} />
@@ -862,10 +950,10 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
         <button
           onClick={() => setShowEquatorialGrid((prev) => !prev)}
           title="Toggle Reference Equatorial Plane Grid"
-          className={`p-1.5 rounded-xs border backdrop-blur-sm transition-colors shadow-sm ${
+          className={`p-2 rounded-lg border backdrop-blur-md transition-colors shadow-xs cursor-pointer ${
             showEquatorialGrid
-              ? 'bg-amber-500/20 text-amber-300 border-amber-500/60'
-              : 'bg-[#0e121d]/90 text-neutral-400 border-[#252f48]'
+              ? 'bg-[#FFD2B8]/40 text-[#9C4217] border-[#FFD2B8] font-bold'
+              : 'bg-white/90 text-[#68758A] border-[#DCE3EE] hover:text-[#263247] hover:bg-[#EEF2F8]'
           }`}
         >
           <Grid size={14} />
@@ -874,11 +962,11 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
         {/* Gravitational Accel Vector Toggle */}
         <button
           onClick={() => setShowGravityVector((prev) => !prev)}
-          title="Toggle Gravitational Acceleration Vector (Purple: Points to Planet Center)"
-          className={`p-1.5 rounded-xs border backdrop-blur-sm transition-colors shadow-sm ${
+          title="Toggle Gravitational Acceleration Vector"
+          className={`p-2 rounded-lg border backdrop-blur-md transition-colors shadow-xs cursor-pointer ${
             showGravityVector
-              ? 'bg-purple-500/20 text-purple-300 border-purple-500/60'
-              : 'bg-[#0e121d]/90 text-neutral-400 border-[#252f48]'
+              ? 'bg-[#C9BDF2]/40 text-[#5B478F] border-[#C9BDF2] font-bold'
+              : 'bg-white/90 text-[#68758A] border-[#DCE3EE] hover:text-[#263247] hover:bg-[#EEF2F8]'
           }`}
         >
           <Zap size={14} />
@@ -888,10 +976,10 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
         <button
           onClick={() => setShowPeriMarker((prev) => !prev)}
           title="Toggle Periapsis & Impact Parameter (b) Markers"
-          className={`p-1.5 rounded-xs border backdrop-blur-sm transition-colors shadow-sm ${
+          className={`p-2 rounded-lg border backdrop-blur-md transition-colors shadow-xs cursor-pointer ${
             showPeriMarker
-              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/60'
-              : 'bg-[#0e121d]/90 text-neutral-400 border-[#252f48]'
+              ? 'bg-[#AEE5D0]/40 text-[#1D6C50] border-[#AEE5D0] font-bold'
+              : 'bg-white/90 text-[#68758A] border-[#DCE3EE] hover:text-[#263247] hover:bg-[#EEF2F8]'
           }`}
         >
           <Target size={14} />
@@ -901,36 +989,36 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
         <div className="relative">
           <button
             onClick={() => setShowSettingsDropdown((prev) => !prev)}
-            title="Graphics & Spacecraft Attitude Settings"
-            className="p-1.5 bg-[#0e121d]/90 hover:bg-[#1a2133] text-neutral-300 hover:text-white rounded-xs border border-[#252f48] backdrop-blur-sm transition-colors shadow-sm flex items-center gap-1"
+            title="Graphics & Spacecraft Settings"
+            className="p-2 bg-white/90 hover:bg-[#EEF2F8] text-[#263247] hover:text-[#1E293B] rounded-lg border border-[#DCE3EE] backdrop-blur-md transition-colors shadow-xs cursor-pointer flex items-center gap-1"
           >
             <Settings size={14} />
           </button>
 
           {showSettingsDropdown && (
-            <div className="absolute right-0 top-8 w-56 bg-[#0b0e17]/95 border border-[#252f48] p-3 rounded-xs shadow-xl backdrop-blur-md flex flex-col gap-2.5 text-xs text-neutral-200 z-50">
-              <div className="flex justify-between items-center border-b border-[#20283d] pb-1.5 text-[10px] text-neutral-400">
-                <span className="font-bold uppercase tracking-wider text-sky-400">3D DISPLAY SETTINGS</span>
+            <div className="absolute right-0 top-10 w-60 bg-white/95 border border-[#DCE3EE] p-3.5 rounded-xl shadow-lg backdrop-blur-md flex flex-col gap-3 text-xs text-[#263247] z-50">
+              <div className="flex justify-between items-center border-b border-[#EEF2F8] pb-2 text-[10px] text-[#68758A]">
+                <span className="font-bold uppercase tracking-wider text-[#1E5F8A]">VIEWPORT DISPLAY</span>
                 <button
                   onClick={() => setShowSettingsDropdown(false)}
-                  className="hover:text-white"
+                  className="hover:text-[#263247] cursor-pointer"
                 >
                   ✕
                 </button>
               </div>
 
               {/* Graphics Quality */}
-              <div className="flex flex-col gap-1">
-                <span className="text-[10px] text-neutral-400">GRAPHICS QUALITY</span>
-                <div className="grid grid-cols-3 gap-1 text-[10px]">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] text-[#68758A] font-bold uppercase">GRAPHICS QUALITY</span>
+                <div className="grid grid-cols-3 gap-1.5 text-[10px]">
                   {(['HIGH', 'BALANCED', 'PERFORMANCE'] as GraphicsQuality[]).map((q) => (
                     <button
                       key={q}
                       onClick={() => setInternalQuality(q)}
-                      className={`py-1 rounded-xs border transition-colors ${
+                      className={`py-1.5 rounded-md border text-center transition-colors cursor-pointer ${
                         quality === q
-                          ? 'bg-sky-500 text-black font-bold border-sky-400'
-                          : 'bg-[#141926] text-neutral-400 border-[#242e44] hover:text-white'
+                          ? 'bg-[#A9D4F5] text-[#1D4F7A] font-bold border-[#89C3EE]'
+                          : 'bg-[#EEF2F8] text-[#68758A] border-[#DCE3EE] hover:text-[#263247]'
                       }`}
                     >
                       {q[0]}
@@ -940,18 +1028,18 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
               </div>
 
               {/* Spacecraft 3D Model Selection */}
-              <div className="flex flex-col gap-1 pt-1 border-t border-[#20283d]">
-                <span className="text-[10px] text-neutral-400">SPACECRAFT 3D MODEL</span>
-                <div className="grid grid-cols-2 gap-1 text-[10px]">
+              <div className="flex flex-col gap-1.5 pt-1.5 border-t border-[#EEF2F8]">
+                <span className="text-[10px] text-[#68758A] font-bold uppercase">SPACECRAFT MODEL</span>
+                <div className="grid grid-cols-2 gap-1.5 text-[10px]">
                   <button
                     onClick={() => {
                       if (spacecraftBundleRef.current) spacecraftBundleRef.current.setModelType('PROBE');
                       onChangeSpacecraftModel?.('PROBE');
                     }}
-                    className={`py-1 px-1.5 rounded-xs border transition-colors ${
+                    className={`py-1.5 px-2 rounded-md border text-center transition-colors cursor-pointer ${
                       (spacecraftBundleRef.current?.modelType || spacecraftModel) === 'PROBE'
-                        ? 'bg-amber-500 text-black font-bold border-amber-400'
-                        : 'bg-[#141926] text-neutral-400 border-[#242e44] hover:text-white'
+                        ? 'bg-[#FFD2B8] text-[#8C3A0F] font-bold border-[#F5B892]'
+                        : 'bg-[#EEF2F8] text-[#68758A] border-[#DCE3EE] hover:text-[#263247]'
                     }`}
                   >
                     PROBE
@@ -961,10 +1049,10 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
                       if (spacecraftBundleRef.current) spacecraftBundleRef.current.setModelType('ROCKET');
                       onChangeSpacecraftModel?.('ROCKET');
                     }}
-                    className={`py-1 px-1.5 rounded-xs border transition-colors ${
+                    className={`py-1.5 px-2 rounded-md border text-center transition-colors cursor-pointer ${
                       (spacecraftBundleRef.current?.modelType || spacecraftModel) === 'ROCKET'
-                        ? 'bg-amber-500 text-black font-bold border-amber-400'
-                        : 'bg-[#141926] text-neutral-400 border-[#242e44] hover:text-white'
+                        ? 'bg-[#FFD2B8] text-[#8C3A0F] font-bold border-[#F5B892]'
+                        : 'bg-[#EEF2F8] text-[#68758A] border-[#DCE3EE] hover:text-[#263247]'
                     }`}
                   >
                     ROCKET
@@ -973,12 +1061,12 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
               </div>
 
               {/* Spacecraft Attitude Mode */}
-              <div className="flex flex-col gap-1 pt-1 border-t border-[#20283d]">
-                <span className="text-[10px] text-neutral-400">SPACECRAFT ATTITUDE</span>
+              <div className="flex flex-col gap-1.5 pt-1.5 border-t border-[#EEF2F8]">
+                <span className="text-[10px] text-[#68758A] font-bold uppercase">SPACECRAFT ATTITUDE</span>
                 <select
                   value={attitudeMode}
                   onChange={(e) => setAttitudeMode(e.target.value as SpacecraftAttitudeMode)}
-                  className="w-full bg-[#141926] border border-[#242e44] rounded-xs px-2 py-1 text-[11px] text-amber-300"
+                  className="w-full bg-[#EEF2F8] border border-[#DCE3EE] rounded-md px-2 py-1.5 text-[11px] text-[#263247] focus:outline-none focus:border-[#A9D4F5] cursor-pointer"
                 >
                   <option value="VELOCITY_ALIGNED">VELOCITY ALIGNED</option>
                   <option value="SUN_POINTING">SUN / EARTH POINTING</option>
@@ -991,91 +1079,70 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
       </div>
 
       {/* Top-Left Reference Frame & Camera Overlay */}
-      <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10 font-mono text-[11px]">
-        <div className="bg-[#0b0e17]/85 border border-[#222a40] px-2.5 py-1.5 rounded-xs backdrop-blur-sm flex items-center gap-2 shadow-sm">
-          <Compass size={13} className="text-amber-400" />
-          <span className="text-neutral-400 text-[10px]">FRAME:</span>
-          <span className="text-amber-300 font-bold">
+      <div className="absolute top-3 left-3 flex flex-col gap-2 z-10 font-mono text-[11px]">
+        <div className="bg-white/90 border border-[#DCE3EE] px-3 py-1.5 rounded-lg backdrop-blur-md flex items-center gap-2 shadow-xs">
+          <Compass size={14} className="text-[#B86230]" />
+          <span className="text-[#68758A] text-[10px] font-bold">FRAME:</span>
+          <span className="text-[#263247] font-bold">
             {referenceFrame === 'PLANET_CENTRIC' ? 'PLANET-CENTRIC (REST FRAME)' : 'SUN-CENTRIC (HELIOCENTRIC FRAME)'}
           </span>
         </div>
 
         {/* Dynamic State Overlay */}
-        <div className="bg-[#0b0e17]/85 border border-[#222a40] px-2.5 py-1 rounded-xs backdrop-blur-sm flex items-center gap-3 text-[10px] text-neutral-300 shadow-sm">
+        <div className="bg-white/90 border border-[#DCE3EE] px-3 py-1 rounded-lg backdrop-blur-md flex items-center gap-3 text-[10px] text-[#263247] shadow-xs">
           <div>
-            PLANET: <strong className="text-white">{simResult?.config.planet.name.toUpperCase() || '—'}</strong>
+            PLANET: <strong className="text-[#1D4F7A]">{simResult?.config.planet.name.toUpperCase() || '—'}</strong>
           </div>
           <div>
-            MODE: <strong className="text-sky-400">{cameraMode}</strong>
+            MODE: <strong className="text-[#6D5AA6]">{cameraMode}</strong>
           </div>
           <div>
-            FPS: <strong className="text-emerald-400">60 FPS</strong>
+            FPS: <strong className="text-[#2D8A68]">60 FPS</strong>
           </div>
         </div>
-
-        {/* Physical Scale & Radius Representation */}
-        {simResult && (
-          <div className="bg-[#0b0e17]/85 border border-[#222a40] px-2.5 py-1 rounded-xs backdrop-blur-sm flex flex-wrap items-center gap-2.5 text-[10px] text-neutral-300 shadow-sm">
-            <div>
-              PHYSICAL RADIUS (R_p):{' '}
-              <strong className="text-amber-300">
-                {(simResult.config.planet.radiusM / 1000).toLocaleString()} km
-              </strong>
-            </div>
-            <span className="text-neutral-600">|</span>
-            <div>
-              GRID CELL:{' '}
-              <strong className="text-sky-300">
-                {(simResult.config.planet.radiusM / 2000).toLocaleString(undefined, { maximumFractionDigits: 0 })} km
-              </strong>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Loading / Numerical Computation Overlay */}
       {(!simResult || simResult.status === 'RUNNING' || simResult.status === 'INITIALIZED') && (
-        <div className="absolute inset-0 bg-[#040508]/85 backdrop-blur-sm z-30 flex flex-col items-center justify-center gap-3 font-mono text-center">
-          <div className="w-8 h-8 border-2 border-sky-400 border-t-transparent rounded-full animate-spin" />
-          <div className="text-sky-300 text-sm font-bold tracking-wider uppercase">
+        <div className="absolute inset-0 bg-[#F5F7FB]/80 backdrop-blur-sm z-30 flex flex-col items-center justify-center gap-3 font-mono text-center">
+          <div className="w-8 h-8 border-3 border-[#A9D4F5] border-t-transparent rounded-full animate-spin" />
+          <div className="text-[#1E5F8A] text-sm font-bold tracking-wider uppercase">
             {simResult?.status === 'RUNNING'
               ? 'Integrating Trajectory (RK4 Adaptive Sub-Stepping)...'
               : 'Awaiting Simulation State...'}
           </div>
-          <div className="text-neutral-400 text-xs max-w-sm">
-            Evaluating 2-body gravitational equations of motion and computing dual-frame orbital telemetry.
+          <div className="text-[#68758A] text-xs max-w-sm">
+            Evaluating gravitational equations of motion and computing dual-frame orbital telemetry.
           </div>
         </div>
       )}
 
-      {/* Bottom Scale & Vectors Legend */}
-      <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-2.5 z-10 font-mono text-[10px] text-neutral-300 pointer-events-none bg-[#090b12]/85 backdrop-blur-sm border border-[#20273c] px-3 py-1 rounded-xs shadow-sm">
+      {/* Bottom Scale & Vectors Legend (Pastel styling) */}
+      <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-2.5 z-10 font-mono text-[10px] text-[#263247] pointer-events-none bg-white/90 backdrop-blur-md border border-[#DCE3EE] px-3.5 py-1.5 rounded-lg shadow-xs">
         {simResult && (
           <>
-            <span className="flex items-center gap-1.5 text-neutral-300">
-              <span className="inline-block w-6 border-b-2 border-amber-400" />
+            <span className="flex items-center gap-1.5 text-[#68758A]">
+              <span className="inline-block w-5 border-b-2 border-[#FFD2B8]" />
               <span>
                 SCALE: 4 UNITS = {(simResult.config.planet.radiusM / 1000).toLocaleString()} km (R_p)
               </span>
             </span>
-            <span className="text-neutral-600">|</span>
+            <span className="text-[#CBD5E1]">|</span>
           </>
         )}
         {showVectors && (
           <>
-            <span className="text-neutral-400">VELOCITY: 1 UNIT = 1.67 km/s</span>
-            <span className="text-neutral-600">|</span>
-            <span className="flex items-center gap-1 text-emerald-400 font-bold">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" /> Spacecraft Velocity
+            <span className="flex items-center gap-1 text-[#2D8A68] font-bold">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#AEE5D0] inline-block border border-[#2D8A68]" /> Spacecraft Velocity
             </span>
             {referenceFrame === 'HELIOCENTRIC' && (
-              <span className="flex items-center gap-1 text-amber-400 font-bold">
-                <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> Planet Orbital Motion (V_p)
+              <span className="flex items-center gap-1 text-[#B86230] font-bold">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#FFD2B8] inline-block border border-[#B86230]" /> Planet Motion (V_p)
               </span>
             )}
             {showGravityVector && (
-              <span className="flex items-center gap-1 text-purple-400 font-bold">
-                <span className="w-2 h-2 rounded-full bg-purple-400 inline-block" /> Gravity Accel g(r)
+              <span className="flex items-center gap-1 text-[#6D5AA6] font-bold">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#C9BDF2] inline-block border border-[#6D5AA6]" /> Gravity Accel g(r)
               </span>
             )}
           </>
@@ -1084,10 +1151,10 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
 
       {/* Collision Warning Banner */}
       {simResult?.collisionDetected && (
-        <div className="absolute bottom-3 right-3 bg-rose-950/90 border border-rose-500/70 px-3 py-1.5 rounded-xs backdrop-blur-sm flex items-center gap-2 text-rose-200 font-mono text-xs z-10 shadow-lg">
-          <ShieldAlert size={14} className="text-rose-400 animate-pulse" />
-          <strong className="text-rose-100 uppercase tracking-wide">SURFACE IMPACT EVENT</strong>
-          <span className="text-rose-300 text-[10px]">
+        <div className="absolute bottom-3 right-3 bg-[#FEE2E2] border border-[#FCA5A5] px-3.5 py-2 rounded-lg backdrop-blur-sm flex items-center gap-2 text-[#991B1B] font-mono text-xs z-10 shadow-md">
+          <ShieldAlert size={15} className="text-[#DC2626] animate-pulse" />
+          <strong className="text-[#7F1D1D] uppercase tracking-wide">SURFACE IMPACT EVENT</strong>
+          <span className="text-[#B91C1C] text-[10px]">
             T_impact = {simResult.collisionTimeS?.toFixed(1)}s (Altitude 0 km)
           </span>
         </div>

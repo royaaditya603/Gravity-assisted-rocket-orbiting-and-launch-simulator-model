@@ -73,7 +73,7 @@ export const App: React.FC = () => {
   }, [handleKeyDown]);
 
   return (
-    <div className="min-h-screen bg-[#06080d] text-white flex flex-col font-sans antialiased selection:bg-cyan-500 selection:text-black">
+    <div className="min-h-screen bg-[#F5F7FB] text-[#263247] flex flex-col font-sans antialiased selection:bg-[#A9D4F5] selection:text-[#1E5F8A]">
       {/* 1. Aerospace Mission Control Header */}
       <Header
         activeWorkspace={activeWorkspace}
@@ -98,14 +98,14 @@ export const App: React.FC = () => {
 
         {activeWorkspace === 'ORBITAL_ASCENT' && (
           <div className="w-full relative">
-            <div className="bg-[#090d16] text-white px-4 sm:px-8 py-3 border-b border-[#182033] flex flex-wrap items-center justify-between gap-4 font-mono text-xs">
+            <div className="bg-white text-[#263247] px-4 sm:px-8 py-3 border-b border-[#DCE3EE] flex flex-wrap items-center justify-between gap-4 font-mono text-xs shadow-xs">
               <div className="flex items-center gap-3">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="font-bold uppercase tracking-wider text-neutral-200">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#AEE5D0] border border-[#2D8A68] animate-pulse" />
+                <span className="font-bold uppercase tracking-wider text-[#263247]">
                   ORBITAL ASCENT COCKPIT // MULTI-STAGE PROPULSION & LEO INSERTION
                 </span>
               </div>
-              <div className="text-[11px] text-neutral-400">
+              <div className="text-[11px] text-[#68758A]">
                 DRAG MOUSE TO ORBIT CAMERA • SCROLL TO ZOOM • 10 UNITS = R_EARTH
               </div>
             </div>

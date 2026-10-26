@@ -21,7 +21,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ history, isOpe
       history.map((p) => p.altitudeKm),
       'ALTITUDE',
       'km',
-      '#38bdf8'
+      '#14426B'
     );
 
     drawChart(
@@ -30,7 +30,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ history, isOpe
       history.map((p) => p.speedMPerS),
       'INERTIAL SPEED',
       'm/s',
-      '#fbbf24'
+      '#B45309'
     );
 
     drawChart(
@@ -39,7 +39,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ history, isOpe
       history.map((p) => p.specificEnergyMJPerKg),
       'SPECIFIC ENERGY',
       'MJ/kg',
-      '#c084fc'
+      '#6B21A8'
     );
   }, [history, isOpen]);
 
@@ -60,10 +60,10 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ history, isOpe
     ctx.clearRect(0, 0, width, height);
 
     // Background & grid
-    ctx.fillStyle = '#0a0c10';
+    ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, width, height);
 
-    ctx.strokeStyle = '#1a1f2c';
+    ctx.strokeStyle = '#EEF2F8';
     ctx.lineWidth = 1;
     for (let y = 20; y < height - 15; y += 25) {
       ctx.beginPath();
@@ -88,7 +88,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ history, isOpe
 
     // Draw Line
     ctx.strokeStyle = lineColor;
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = 2.0;
     ctx.beginPath();
     ctx.moveTo(plotX(xData[0]), plotY(yData[0]));
     for (let i = 1; i < xData.length; i++) {
@@ -97,15 +97,15 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ history, isOpe
     ctx.stroke();
 
     // Labels
-    ctx.fillStyle = '#8e96a4';
+    ctx.fillStyle = '#68758A';
     ctx.font = '9px monospace';
     ctx.fillText(`${yMax.toFixed(0)}`, 4, 18);
     ctx.fillText(`${yMin.toFixed(0)}`, 4, height - 20);
 
     // Title & Latest Value
     const latestVal = yData[yData.length - 1];
-    ctx.fillStyle = '#f0f2f6';
-    ctx.font = '10px monospace';
+    ctx.fillStyle = '#263247';
+    ctx.font = 'bold 10px monospace';
     ctx.fillText(`${title}: ${latestVal.toFixed(1)} ${unit}`, 40, 14);
   };
 
@@ -113,26 +113,26 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ history, isOpe
     <div className="absolute top-4 right-4 z-20 pointer-events-auto flex flex-col items-end">
       <button
         onClick={onToggle}
-        className="px-2.5 py-1.5 bg-[#0e1017]/85 backdrop-blur-md border border-[#232733] hover:border-neutral-500 rounded-xs text-[11px] font-mono text-neutral-300 transition-colors shadow-lg"
+        className="px-2.5 py-1.5 bg-white/95 backdrop-blur-md border border-[#DCE3EE] hover:border-[#89C2EE] rounded-lg text-[11px] font-mono text-[#263247] transition-colors shadow-lg"
       >
         {isOpen ? 'HIDE CHARTS [x]' : 'TELEMETRY PLOTS [↑]'}
       </button>
 
       {isOpen && (
-        <div className="mt-2 w-72 sm:w-80 bg-[#0e1017]/95 backdrop-blur-md border border-[#232733] p-3 rounded-sm shadow-2xl flex flex-col gap-3">
-          <div className="flex items-center justify-between border-b border-[#232733] pb-1">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400">
+        <div className="mt-2 w-72 sm:w-80 bg-white/95 backdrop-blur-md border border-[#DCE3EE] p-3 rounded-xl shadow-2xl flex flex-col gap-3 text-[#263247]">
+          <div className="flex items-center justify-between border-b border-[#DCE3EE] pb-1">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-[#68758A] font-bold">
               REAL-TIME PROFILES
             </span>
-            <span className="text-[10px] font-mono text-neutral-500">
+            <span className="text-[10px] font-mono text-[#68758A]">
               {history.length} SAMPLES
             </span>
           </div>
 
           <div className="flex flex-col gap-2">
-            <canvas ref={altCanvasRef} width={300} height={90} className="w-full rounded-xs border border-[#1c202a]" />
-            <canvas ref={velCanvasRef} width={300} height={90} className="w-full rounded-xs border border-[#1c202a]" />
-            <canvas ref={energyCanvasRef} width={300} height={90} className="w-full rounded-xs border border-[#1c202a]" />
+            <canvas ref={altCanvasRef} width={300} height={90} className="w-full rounded-lg border border-[#DCE3EE]" />
+            <canvas ref={velCanvasRef} width={300} height={90} className="w-full rounded-lg border border-[#DCE3EE]" />
+            <canvas ref={energyCanvasRef} width={300} height={90} className="w-full rounded-lg border border-[#DCE3EE]" />
           </div>
         </div>
       )}

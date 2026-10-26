@@ -174,54 +174,54 @@ export const MissionWorkspace: React.FC<MissionWorkspaceProps> = ({ onNavigateTo
   ];
 
   return (
-    <section id="mission-mode" className="w-full bg-[#080910] border-t border-[#1e2338] text-white py-6 px-4 sm:px-8 flex flex-col gap-6">
+    <section id="mission-mode" className="w-full bg-[#F5F7FB] border-t border-[#DCE3EE] text-[#263247] py-6 px-4 sm:px-8 flex flex-col gap-6">
       <div className="max-w-7xl mx-auto w-full flex flex-col gap-6">
         
         {/* 1. Header Bar: Navigation back to Ascent, Mission Title & Controls */}
-        <div className="flex flex-col gap-3 border-b border-[#20263b] pb-4">
+        <div className="flex flex-col gap-3 border-b border-[#DCE3EE] pb-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               {onNavigateToAscent && (
                 <button
                   onClick={onNavigateToAscent}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#141826] hover:bg-[#20273d] text-cyan-400 border border-[#27304a] rounded-xs font-mono text-xs transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-[#EEF2F8] text-[#0284C7] border border-[#DCE3EE] rounded-lg font-mono text-xs transition-colors shadow-2xs font-bold"
                 >
                   <ArrowLeft size={13} />
                   <span>ASCENT COCKPIT</span>
                 </button>
               )}
-              <div className="w-8 h-8 rounded-xs bg-cyan-500 text-black flex items-center justify-center font-bold">
+              <div className="w-8 h-8 rounded-lg bg-[#A9D4F5] text-[#14426B] flex items-center justify-center font-bold shadow-2xs">
                 <Compass size={20} />
               </div>
               <div className="flex flex-col">
-                <span className="font-mono text-xs font-bold uppercase tracking-widest text-cyan-400">
+                <span className="font-mono text-xs font-bold uppercase tracking-widest text-[#0284C7]">
                   CONNECTED MISSION MODE // SOLAR SYSTEM FLYBY ENGINE
                 </span>
-                <h2 className="font-sans font-black text-xl tracking-tight text-white">
+                <h2 className="font-sans font-black text-xl tracking-tight text-[#263247]">
                   INTERPLANETARY MISSION SUITE & VOYAGER 2 REPLAY
                 </h2>
               </div>
             </div>
 
             {/* Planetary Motion Mode Switcher */}
-            <div className="flex items-center gap-2 bg-[#121624] p-1 rounded-xs border border-[#262f48] text-xs font-mono">
-              <span className="text-[10px] text-neutral-400 uppercase px-2 font-bold">EPHEMERIS:</span>
+            <div className="flex items-center gap-1 bg-[#EEF2F8] p-1 rounded-lg border border-[#DCE3EE] text-xs font-mono">
+              <span className="text-[10px] text-[#68758A] uppercase px-2 font-bold">EPHEMERIS:</span>
               <button
                 onClick={() => handleMotionModeChange('SIMPLIFIED')}
-                className={`px-3 py-1 rounded-xs transition-colors ${
+                className={`px-3 py-1 rounded-md transition-colors ${
                   motionMode === 'SIMPLIFIED'
-                    ? 'bg-amber-500 text-black font-bold'
-                    : 'text-neutral-400 hover:text-white'
+                    ? 'bg-[#FFD2B8] text-[#7A3E1D] font-bold shadow-2xs'
+                    : 'text-[#68758A] hover:text-[#263247]'
                 }`}
               >
                 SIMPLIFIED CIRCULAR
               </button>
               <button
                 onClick={() => handleMotionModeChange('EPHEMERIS')}
-                className={`px-3 py-1 rounded-xs transition-colors ${
+                className={`px-3 py-1 rounded-md transition-colors ${
                   motionMode === 'EPHEMERIS'
-                    ? 'bg-cyan-500 text-black font-bold'
-                    : 'text-neutral-400 hover:text-white'
+                    ? 'bg-[#A9D4F5] text-[#14426B] font-bold shadow-2xs'
+                    : 'text-[#68758A] hover:text-[#263247]'
                 }`}
               >
                 JPL EPHEMERIS (DE)
@@ -244,21 +244,21 @@ export const MissionWorkspace: React.FC<MissionWorkspaceProps> = ({ onNavigateTo
                       handleSeekDays(p.seekDay);
                     }
                   }}
-                  className={`p-2.5 rounded-xs border text-left flex flex-col gap-1 transition-all ${
+                  className={`p-2.5 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-[#151c30] border-cyan-400 shadow-md'
-                      : 'bg-[#10131e] border-[#202538] hover:border-[#333d59]'
+                      ? 'bg-white border-[#A9D4F5] shadow-xs ring-2 ring-[#A9D4F5]/50'
+                      : 'bg-[#EEF2F8] border-[#DCE3EE] hover:bg-white'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className={`text-[10px] font-mono font-bold uppercase tracking-wider ${
-                      isActive ? 'text-cyan-300' : 'text-neutral-400'
+                      isActive ? 'text-[#14426B]' : 'text-[#68758A]'
                     }`}>
                       {p.name}
                     </span>
-                    {isActive && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />}
+                    {isActive && <span className="w-1.5 h-1.5 rounded-full bg-[#0284C7] animate-pulse" />}
                   </div>
-                  <p className="text-[10px] text-neutral-400 leading-tight">
+                  <p className="text-[10px] text-[#68758A] leading-tight">
                     {p.desc}
                   </p>
                 </button>
@@ -267,53 +267,53 @@ export const MissionWorkspace: React.FC<MissionWorkspaceProps> = ({ onNavigateTo
           </div>
 
           {/* Scenario Tabs & Spacecraft Selector */}
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-mono pt-2 border-t border-[#1c2235]">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-mono pt-2 border-t border-[#DCE3EE]">
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => handleScenarioChange('VOYAGER_2_REFERENCE')}
-                className={`px-3 py-1.5 rounded-xs border transition-colors flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 cursor-pointer ${
                   scenarioType === 'VOYAGER_2_REFERENCE'
-                    ? 'bg-[#181d2e] border-amber-400 text-amber-300 font-bold'
-                    : 'bg-[#10131e] border-[#22273a] text-neutral-400 hover:text-white'
+                    ? 'bg-white border-[#FFD2B8] text-[#7A3E1D] font-bold shadow-2xs'
+                    : 'bg-[#EEF2F8] border-[#DCE3EE] text-[#68758A] hover:text-[#263247]'
                 }`}
               >
-                <ShieldCheck size={13} className="text-amber-400" />
+                <ShieldCheck size={13} className="text-[#B45309]" />
                 <span>1. VOYAGER 2 GRAND TOUR (HISTORICAL)</span>
               </button>
 
               <button
                 onClick={() => handleScenarioChange('CONCEPTUAL_JUPITER_SATURN')}
-                className={`px-3 py-1.5 rounded-xs border transition-colors flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 cursor-pointer ${
                   scenarioType === 'CONCEPTUAL_JUPITER_SATURN'
-                    ? 'bg-[#181d2e] border-cyan-400 text-cyan-300 font-bold'
-                    : 'bg-[#10131e] border-[#22273a] text-neutral-400 hover:text-white'
+                    ? 'bg-white border-[#A9D4F5] text-[#14426B] font-bold shadow-2xs'
+                    : 'bg-[#EEF2F8] border-[#DCE3EE] text-[#68758A] hover:text-[#263247]'
                 }`}
               >
-                <Sparkles size={13} className="text-cyan-400" />
+                <Sparkles size={13} className="text-[#0284C7]" />
                 <span>2. JUPITER-SATURN TRANSFER</span>
               </button>
 
               <button
                 onClick={() => handleScenarioChange('CASSINI_VVEJGA_REFERENCE')}
-                className={`px-3 py-1.5 rounded-xs border transition-colors flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 cursor-pointer ${
                   scenarioType === 'CASSINI_VVEJGA_REFERENCE'
-                    ? 'bg-[#181d2e] border-purple-400 text-purple-300 font-bold'
-                    : 'bg-[#10131e] border-[#22273a] text-neutral-400 hover:text-white'
+                    ? 'bg-white border-[#C9BDF2] text-[#4A347F] font-bold shadow-2xs'
+                    : 'bg-[#EEF2F8] border-[#DCE3EE] text-[#68758A] hover:text-[#263247]'
                 }`}
               >
-                <Layers size={13} className="text-purple-400" />
+                <Layers size={13} className="text-[#7C3AED]" />
                 <span>3. CASSINI VVEJGA RESONANT TOUR</span>
               </button>
             </div>
 
             {/* Spacecraft Selection Dropdown */}
             <div className="flex items-center gap-2">
-              <Rocket size={14} className="text-neutral-400" />
-              <span className="text-[10px] text-neutral-400 uppercase">PROBE:</span>
+              <Rocket size={14} className="text-[#68758A]" />
+              <span className="text-[10px] text-[#68758A] uppercase font-semibold">PROBE:</span>
               <select
                 value={spacecraftId}
                 onChange={(e) => setSpacecraftId(e.target.value)}
-                className="bg-[#121624] border border-[#252c42] px-2.5 py-1 rounded-xs text-xs text-white outline-none cursor-pointer"
+                className="bg-white border border-[#DCE3EE] px-2.5 py-1 rounded-lg text-xs text-[#263247] outline-none cursor-pointer shadow-2xs"
               >
                 {Object.values(MISSION_SPACECRAFT_PRESETS).map((sc) => (
                   <option key={sc.id} value={sc.id}>
@@ -327,16 +327,16 @@ export const MissionWorkspace: React.FC<MissionWorkspaceProps> = ({ onNavigateTo
 
         {/* 2. Scenario Classification & Physical Disclaimer Banner */}
         <div
-          className={`p-3 rounded-xs border text-xs font-mono flex items-start gap-3 ${
+          className={`p-3.5 rounded-xl border text-xs font-mono flex items-start gap-3 shadow-2xs ${
             missionResult.isConceptual
-              ? 'bg-[#19150d] border-amber-500/40 text-amber-200'
-              : 'bg-[#0d161d] border-cyan-500/40 text-cyan-200'
+              ? 'bg-[#FFFBEB] border-[#FDE68A] text-[#92400E]'
+              : 'bg-[#F0F9FF] border-[#BAE6FD] text-[#0369A1]'
           }`}
         >
           {missionResult.isConceptual ? (
-            <AlertTriangle size={18} className="text-amber-400 shrink-0 mt-0.5" />
+            <AlertTriangle size={18} className="text-[#D97706] shrink-0 mt-0.5" />
           ) : (
-            <ShieldCheck size={18} className="text-cyan-400 shrink-0 mt-0.5" />
+            <ShieldCheck size={18} className="text-[#0284C7] shrink-0 mt-0.5" />
           )}
           <div className="flex flex-col gap-0.5">
             <span className="font-bold uppercase tracking-wider text-[11px]">
@@ -344,7 +344,7 @@ export const MissionWorkspace: React.FC<MissionWorkspaceProps> = ({ onNavigateTo
                 ? 'HYPOTHETICAL EDUCATIONAL MISSION SCENARIO'
                 : 'REAL MISSION REFERENCE DOSSIER // NASA JPL ARCHIVAL MEASUREMENTS'}
             </span>
-            <p className="text-[11px] leading-relaxed opacity-90">{missionResult.conceptualDisclaimer}</p>
+            <p className="text-[11px] leading-relaxed opacity-95">{missionResult.conceptualDisclaimer}</p>
           </div>
         </div>
 
@@ -374,15 +374,15 @@ export const MissionWorkspace: React.FC<MissionWorkspaceProps> = ({ onNavigateTo
 
         {/* 5. VOYAGER 2 GRAND TOUR HISTORICAL DOSSIER & COURSE CORRECTIONS (TCMs) */}
         {scenarioType === 'VOYAGER_2_REFERENCE' && (
-          <div className="w-full bg-[#0d0f17] border border-[#222538] p-4 rounded-xs text-white font-mono flex flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#1f2436] pb-3">
+          <div className="w-full bg-white border border-[#DCE3EE] p-5 rounded-xl text-[#263247] font-mono flex flex-col gap-4 shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#DCE3EE] pb-3">
               <div className="flex items-center gap-2">
-                <Calendar size={16} className="text-amber-400" />
-                <span className="font-bold text-xs uppercase tracking-wider text-amber-300">
+                <Calendar size={16} className="text-[#B45309]" />
+                <span className="font-bold text-xs uppercase tracking-wider text-[#14426B]">
                   VOYAGER 2 GRAND TOUR: HISTORICAL TIMELINE & TRAJECTORY CORRECTION MANEUVERS (TCMS)
                 </span>
               </div>
-              <span className="text-[11px] text-neutral-400">
+              <span className="text-[11px] text-[#68758A]">
                 TITAN IIIE-CENTAUR LAUNCH // AUG 20, 1977
               </span>
             </div>
@@ -393,21 +393,21 @@ export const MissionWorkspace: React.FC<MissionWorkspaceProps> = ({ onNavigateTo
                 <div
                   key={tcm.id}
                   onClick={() => handleSeekDays(tcm.metDays)}
-                  className="bg-[#121624] border border-[#232c44] hover:border-amber-400/80 p-3 rounded-xs flex flex-col justify-between gap-2 cursor-pointer transition-colors"
+                  className="bg-[#F8FAFD] border border-[#DCE3EE] hover:border-[#A9D4F5] p-3.5 rounded-xl flex flex-col justify-between gap-2 cursor-pointer transition-all shadow-2xs hover:shadow-xs"
                 >
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-amber-400 text-xs">{tcm.id}</span>
-                      <span className="text-[10px] text-neutral-400">T+{tcm.metDays} D</span>
+                      <span className="font-bold text-[#B45309] text-xs">{tcm.id}</span>
+                      <span className="text-[10px] text-[#68758A]">T+{tcm.metDays} D</span>
                     </div>
-                    <span className="text-[11px] font-bold text-white leading-tight">{tcm.name}</span>
-                    <span className="text-[10px] text-cyan-300">Epoch: {tcm.epochUTC}</span>
-                    <span className="text-[10px] text-emerald-400 font-bold">ΔV = {tcm.deltaVMPerS} m/s</span>
-                    <p className="text-[10px] text-neutral-400 leading-tight pt-1 border-t border-[#1e2538]">
+                    <span className="text-[11px] font-bold text-[#263247] leading-tight">{tcm.name}</span>
+                    <span className="text-[10px] text-[#0284C7]">Epoch: {tcm.epochUTC}</span>
+                    <span className="text-[10px] text-[#059669] font-bold">ΔV = {tcm.deltaVMPerS} m/s</span>
+                    <p className="text-[10px] text-[#68758A] leading-tight pt-1 border-t border-[#DCE3EE]">
                       {tcm.objective}
                     </p>
                   </div>
-                  <span className="text-[9px] text-amber-500 uppercase tracking-widest mt-1 hover:underline">
+                  <span className="text-[9px] text-[#0284C7] font-bold uppercase tracking-widest mt-1 hover:underline">
                     SEEK TO MANEUVER →
                   </span>
                 </div>
@@ -415,32 +415,32 @@ export const MissionWorkspace: React.FC<MissionWorkspaceProps> = ({ onNavigateTo
             </div>
 
             {/* Side-by-Side Physical Analysis: Patched-Conic vs Documented Reality */}
-            <div className="bg-[#121624] border border-[#232a3f] p-4 rounded-xs flex flex-col gap-3">
-              <span className="font-bold text-xs uppercase tracking-wider text-cyan-300 border-b border-[#1f2538] pb-2">
+            <div className="bg-[#F8FAFD] border border-[#DCE3EE] p-4 rounded-xl flex flex-col gap-3 shadow-2xs">
+              <span className="font-bold text-xs uppercase tracking-wider text-[#14426B] border-b border-[#DCE3EE] pb-2">
                 ASTRODYNAMICS VERIFICATION: SIMPLIFIED 2-BODY CONIC VS. NASA DE EPHEMERIS REALITY
               </span>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-[11px] leading-relaxed text-neutral-300">
-                <div className="bg-[#161a29] p-3 rounded-xs border border-[#27304a] flex flex-col gap-1">
-                  <span className="font-bold text-amber-300 uppercase text-[10px]">1. Oblateness Harmonics (J2/J4)</span>
-                  <p className="text-neutral-400 text-[10px]">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-[11px] leading-relaxed text-[#263247]">
+                <div className="bg-white p-3 rounded-lg border border-[#DCE3EE] flex flex-col gap-1 shadow-2xs">
+                  <span className="font-bold text-[#B45309] uppercase text-[10px]">1. Oblateness Harmonics (J2/J4)</span>
+                  <p className="text-[#68758A] text-[10px]">
                     Rapidly rotating gas giants have massive equatorial bulges (Jupiter J2 = 1.47×10⁻²). This non-spherical gravity field creates nodal precession during periapsis that cannot be modeled by simple point-mass equations.
                   </p>
                 </div>
-                <div className="bg-[#161a29] p-3 rounded-xs border border-[#27304a] flex flex-col gap-1">
-                  <span className="font-bold text-cyan-300 uppercase text-[10px]">2. Major Moon Perturbations</span>
-                  <p className="text-neutral-400 text-[10px]">
+                <div className="bg-white p-3 rounded-lg border border-[#DCE3EE] flex flex-col gap-1 shadow-2xs">
+                  <span className="font-bold text-[#0284C7] uppercase text-[10px]">2. Major Moon Perturbations</span>
+                  <p className="text-[#68758A] text-[10px]">
                     Simultaneous gravitational pulls from Galilean moons (Io, Europa, Ganymede, Callisto), Titan, and Triton slightly altered the hyperbola deflection angles, requiring fine-tuned trim burns.
                   </p>
                 </div>
-                <div className="bg-[#161a29] p-3 rounded-xs border border-[#27304a] flex flex-col gap-1">
-                  <span className="font-bold text-emerald-300 uppercase text-[10px]">3. 3D Out-of-Ecliptic Targeting</span>
-                  <p className="text-neutral-400 text-[10px]">
+                <div className="bg-white p-3 rounded-lg border border-[#DCE3EE] flex flex-col gap-1 shadow-2xs">
+                  <span className="font-bold text-[#059669] uppercase text-[10px]">3. 3D Out-of-Ecliptic Targeting</span>
+                  <p className="text-[#68758A] text-[10px]">
                     Voyager 2’s trajectory was deliberately 3D non-coplanar: the Neptune flyby passed over the north pole, bending the outbound trajectory 48° south of the solar plane to observe Triton.
                   </p>
                 </div>
-                <div className="bg-[#161a29] p-3 rounded-xs border border-[#27304a] flex flex-col gap-1">
-                  <span className="font-bold text-purple-300 uppercase text-[10px]">4. Non-Linear ΔV Mechanics</span>
-                  <p className="text-neutral-400 text-[10px]">
+                <div className="bg-white p-3 rounded-lg border border-[#DCE3EE] flex flex-col gap-1 shadow-2xs">
+                  <span className="font-bold text-[#7C3AED] uppercase text-[10px]">4. Non-Linear ΔV Mechanics</span>
+                  <p className="text-[#68758A] text-[10px]">
                     In orbital mechanics, vector rotations alter heliocentric energy non-linearly. The scalar sum of planetary boosts (43.8 km/s) does not equal the vector resultant, as each flyby rotates the orbital ellipse in 3D space.
                   </p>
                 </div>
