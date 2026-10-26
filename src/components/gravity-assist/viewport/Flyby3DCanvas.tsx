@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import * as THREE from 'three';
 import { FlybySimulationResult, ReferenceFrame } from '../../../physics/FlybyEngine';
 import { PlanetaryVisuals, PlanetBundle } from './PlanetaryVisuals';
-import { SpacecraftVisuals, SpacecraftBundle, SpacecraftAttitudeMode } from './SpacecraftVisuals';
+import { SpacecraftVisuals, SpacecraftBundle, SpacecraftAttitudeMode, SpacecraftModelType } from './SpacecraftVisuals';
 import { TrajectoryInterpolator, InterpolatedState } from './TrajectoryInterpolator';
 import {
   RotateCcw,
@@ -40,6 +40,8 @@ export interface Flyby3DCanvasProps {
   heightClass?: string;
   graphicsQuality?: GraphicsQuality;
   reducedMotion?: boolean;
+  spacecraftModel?: SpacecraftModelType;
+  onChangeSpacecraftModel?: (model: SpacecraftModelType) => void;
 }
 
 export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
@@ -61,6 +63,8 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
   heightClass = 'h-[540px]',
   graphicsQuality: propQuality,
   reducedMotion = false,
+  spacecraftModel = 'PROBE',
+  onChangeSpacecraftModel,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -89,6 +93,13 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
       interpolatorRef.current = null;
     }
   }, [simResult]);
+
+  // Synchronize 3D Spacecraft Model preference
+  useEffect(() => {
+    if (spacecraftBundleRef.current && spacecraftModel) {
+      spacecraftBundleRef.current.setModelType(spacecraftModel);
+    }
+  }, [spacecraftModel]);
 
   // Visual Scale: Planet radius = 4.0 scene units
   const VISUAL_PLANET_RADIUS = 4.0;
@@ -278,8 +289,8 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
     scene.add(impactGroup);
     impactMarkerRef.current = impactGroup;
 
-    // High-Fidelity Spacecraft Probe
-    const scBundle = SpacecraftVisuals.create(1.0);
+    // High-Fidelity Spacecraft (Probe or Launch Vehicle)
+    const scBundle = SpacecraftVisuals.create(1.0, spacecraftModel);
     // Add distinct high-visibility beacon marker so spacecraft is recognizable at all zoom levels
     const beaconGeo = new THREE.OctahedronGeometry(0.4);
     const beaconMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true });
