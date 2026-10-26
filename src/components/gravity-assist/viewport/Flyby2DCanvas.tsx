@@ -33,6 +33,7 @@ export interface Flyby2DCanvasProps {
   onChangeViewportMode?: (mode: '2D' | '3D') => void;
   title?: string;
   heightClass?: string;
+  isClockMaster?: boolean;
 }
 
 export const Flyby2DCanvas: React.FC<Flyby2DCanvasProps> = ({
@@ -49,6 +50,7 @@ export const Flyby2DCanvas: React.FC<Flyby2DCanvasProps> = ({
   onChangeViewportMode,
   title,
   heightClass = 'h-[580px]',
+  isClockMaster = true,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -62,6 +64,15 @@ export const Flyby2DCanvas: React.FC<Flyby2DCanvasProps> = ({
       interpolatorRef.current = null;
     }
   }, [simResult]);
+
+  // Synchronize state with refs to prevent teardown in 60 FPS animation loop
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
+
+  const isClockMasterRef = useRef(isClockMaster);
+  isClockMasterRef.current = isClockMaster;
+
+  const lastEmittedIndexRef = useRef<number>(-1);
 
   // Viewport Pan & Zoom Transform (world meters to canvas pixels)
   // (panX, panY) is the canvas offset from center (0, 0)
@@ -89,10 +100,17 @@ export const Flyby2DCanvas: React.FC<Flyby2DCanvasProps> = ({
   const lastSyncTimeRef = useRef<number>(0);
   const animFrameIdRef = useRef<number>(0);
 
-  // Sync with currentPlaybackIndex when user seeks externally
+  // Sync with currentPlaybackIndex when user seeks externally (prevents continuous clock snapping)
   useEffect(() => {
-    if (simResult && simResult.trajectory[currentPlaybackIndex]) {
-      currentTimeSRef.current = simResult.trajectory[currentPlaybackIndex].timeS;
+    if (simResult && simResult.trajectory.length > 0) {
+      if (isPlayingRef.current && isClockMasterRef.current && currentPlaybackIndex === lastEmittedIndexRef.current) {
+        return;
+      }
+      const idx = Math.min(Math.max(0, currentPlaybackIndex), simResult.trajectory.length - 1);
+      const targetTimeS = simResult.trajectory[idx].timeS;
+      if (!isPlayingRef.current || Math.abs(currentTimeSRef.current - targetTimeS) > 3.0) {
+        currentTimeSRef.current = targetTimeS;
+      }
     }
   }, [currentPlaybackIndex, simResult]);
 
@@ -262,13 +280,14 @@ export const Flyby2DCanvas: React.FC<Flyby2DCanvasProps> = ({
         }
 
         // Throttled parent sync (~25 Hz)
-        if (now - lastSyncTimeRef.current > 40 && onPlaybackIndexChange) {
+        if (isClockMasterRef.current && now - lastSyncTimeRef.current > 40 && onPlaybackIndexChange) {
           lastSyncTimeRef.current = now;
           const progress = Math.max(0, Math.min(1, currentTimeSRef.current / Math.max(1, totalDuration)));
           const targetIndex = Math.min(
             simResult.trajectory.length - 1,
             Math.floor(progress * (simResult.trajectory.length - 1))
           );
+          lastEmittedIndexRef.current = targetIndex;
           onPlaybackIndexChange(targetIndex);
         }
       }

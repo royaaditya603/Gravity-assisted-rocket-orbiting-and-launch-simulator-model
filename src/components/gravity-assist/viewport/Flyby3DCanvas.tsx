@@ -23,6 +23,15 @@ import { WebGLFallbackDisplay } from './WebGLFallbackDisplay';
 export type FlybyCameraMode = 'OVERVIEW' | 'CLOSE_UP' | 'PROBE_FOLLOW' | 'FREE';
 export type GraphicsQuality = 'HIGH' | 'BALANCED' | 'PERFORMANCE';
 
+// Scratch vectors for the 60 FPS animation loop (zero garbage collection)
+const _scratchV1 = new THREE.Vector3();
+const _scratchV2 = new THREE.Vector3();
+const _scratchV3 = new THREE.Vector3();
+const _scratchSunPos = new THREE.Vector3(100, 40, 80);
+const _scratchCamTarget = new THREE.Vector3();
+const _scratchCurrentPosScene = new THREE.Vector3();
+const _scratchCurrentVelScene = new THREE.Vector3();
+
 export interface Flyby3DCanvasProps {
   viewportMode?: '2D' | '3D';
   onChangeViewportMode?: (mode: '2D' | '3D') => void;
@@ -46,6 +55,7 @@ export interface Flyby3DCanvasProps {
   reducedMotion?: boolean;
   spacecraftModel?: SpacecraftModelType;
   onChangeSpacecraftModel?: (model: SpacecraftModelType) => void;
+  isClockMaster?: boolean;
 }
 
 export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
@@ -71,6 +81,7 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
   reducedMotion = false,
   spacecraftModel = 'PROBE',
   onChangeSpacecraftModel,
+  isClockMaster = true,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -124,6 +135,11 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
   const onPlaybackIndexChangeRef = useRef(onPlaybackIndexChange);
   onPlaybackIndexChangeRef.current = onPlaybackIndexChange;
 
+  const isClockMasterRef = useRef(isClockMaster);
+  isClockMasterRef.current = isClockMaster;
+
+  const lastEmittedIndexRef = useRef<number>(-1);
+
   // High-Precision Hermite Interpolator
   const interpolatorRef = useRef<TrajectoryInterpolator | null>(null);
   useEffect(() => {
@@ -173,10 +189,15 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
   // Sync internal continuous time when currentPlaybackIndex is changed from outside (seeking/reset)
   useEffect(() => {
     if (simResult && simResult.trajectory.length > 0) {
-      const idx = Math.min(currentPlaybackIndex, simResult.trajectory.length - 1);
+      // If playback is currently active and the index change was emitted by our own master clock,
+      // ignore it to prevent fighting the continuous Hermite clock and creating stutter loops
+      if (isPlayingRef.current && isClockMasterRef.current && currentPlaybackIndex === lastEmittedIndexRef.current) {
+        return;
+      }
+      const idx = Math.min(Math.max(0, currentPlaybackIndex), simResult.trajectory.length - 1);
       const targetTimeS = simResult.trajectory[idx].timeS;
-      // Only snap if outside normal continuous playback range to avoid jitter
-      if (Math.abs(currentTimeSRef.current - targetTimeS) > 1.2 || !isPlayingRef.current) {
+      // In secondary canvas or during external scrub/step/pause, synchronize time
+      if (!isPlayingRef.current || Math.abs(currentTimeSRef.current - targetTimeS) > 3.0) {
         currentTimeSRef.current = targetTimeS;
         lastDrawnIdxRef.current = -1;
       }
@@ -486,20 +507,21 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
         }
 
         // Throttled synchronization back to React HUD / charts (~25 Hz)
-        if (time - lastSyncTimeRef.current > 40 && onPlaybackIndexChangeRef.current) {
+        if (isClockMasterRef.current && time - lastSyncTimeRef.current > 40 && onPlaybackIndexChangeRef.current) {
           lastSyncTimeRef.current = time;
           const progress = Math.max(0, Math.min(1, currentTimeSRef.current / Math.max(1, totalDuration)));
           const targetIndex = Math.min(
             activeSim.trajectory.length - 1,
             Math.floor(progress * (activeSim.trajectory.length - 1))
           );
+          lastEmittedIndexRef.current = targetIndex;
           onPlaybackIndexChangeRef.current(targetIndex);
         }
       }
 
-      // 2. Continuous Hermite Evaluation
-      let currentPosScene = new THREE.Vector3(0, 0, 0);
-      let currentVelScene = new THREE.Vector3(0, 0, 0);
+      // 2. Continuous Hermite Evaluation (Zero GC Allocations)
+      const currentPosScene = _scratchCurrentPosScene.set(0, 0, 0);
+      const currentVelScene = _scratchCurrentVelScene.set(0, 0, 0);
 
       if (interpolator && activeSim) {
         const state: InterpolatedState = interpolator.evaluateAtTime(currentTimeSRef.current);
@@ -542,17 +564,16 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
 
         // Update Spacecraft transforms smoothly with Quaternion SLERP
         if (spacecraftBundleRef.current) {
-          const sunPos = new THREE.Vector3(100, 40, 80);
           spacecraftBundleRef.current.update(
             currentPosScene,
             currentVelScene,
-            sunPos,
+            _scratchSunPos,
             attitudeModeRef.current,
             dt
           );
         }
 
-        // Smooth Trajectory Trail Update (Past vs Predicted Future)
+        // Smooth Trajectory Trail Update (Past vs Predicted Future) with Zero Heap Allocations
         if (showTrajectoryTrailRef.current && allScenePointsRef.current.length > 0) {
           const allPts = allScenePointsRef.current;
           const totalDuration = interpolator.getTotalDurationS();
@@ -560,16 +581,21 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
           const curIdx = Math.min(allPts.length - 1, Math.floor(progress * (allPts.length - 1)));
 
           if (pastLineRef.current) {
-            const pastPts = [...allPts.slice(0, curIdx + 1), currentPosScene];
-            pastLineRef.current.geometry.setFromPoints(pastPts);
+            const geo = pastLineRef.current.geometry;
+            const posAttr = geo.attributes.position as THREE.BufferAttribute;
+            if (posAttr) {
+              posAttr.setXYZ(curIdx + 1, currentPosScene.x, currentPosScene.y, currentPosScene.z);
+              posAttr.needsUpdate = true;
+              geo.setDrawRange(0, curIdx + 2);
+            }
           }
 
-          if (curIdx !== lastDrawnIdxRef.current) {
-            lastDrawnIdxRef.current = curIdx;
-            if (futureLineRef.current) {
-              const futurePts = [currentPosScene, ...allPts.slice(curIdx + 1)];
-              futureLineRef.current.geometry.setFromPoints(futurePts);
-              futureLineRef.current.computeLineDistances();
+          if (futureLineRef.current) {
+            if (curIdx !== lastDrawnIdxRef.current) {
+              lastDrawnIdxRef.current = curIdx;
+              const geo = futureLineRef.current.geometry;
+              const remainingCount = Math.max(0, allPts.length - curIdx);
+              geo.setDrawRange(curIdx, remainingCount);
             }
           }
         }
@@ -580,9 +606,11 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
           const vLen = currentVelScene.length() * vScale;
           if (velArrowRef.current) {
             if (vLen > 0.15) {
-              velArrowRef.current.setDirection(currentVelScene.clone().normalize());
+              _scratchV1.copy(currentVelScene).normalize();
+              velArrowRef.current.setDirection(_scratchV1);
               velArrowRef.current.setLength(vLen, 0.45, 0.22);
-              velArrowRef.current.position.copy(currentPosScene).add(new THREE.Vector3(0, 0.2, 0));
+              velArrowRef.current.position.copy(currentPosScene);
+              velArrowRef.current.position.y += 0.2;
               velArrowRef.current.visible = true;
             } else {
               velArrowRef.current.visible = false;
@@ -591,13 +619,15 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
 
           if (planetVelArrowRef.current) {
             if (isSunFrame && planetBundleRef.current) {
-              const pPos = planetBundleRef.current.group.position.clone();
-              const pVel = new THREE.Vector3(state.planetVelSunM.x, 0, state.planetVelSunM.y);
-              const pVelLen = pVel.length() * vScale;
+              const pPos = planetBundleRef.current.group.position;
+              _scratchV1.set(state.planetVelSunM.x, 0, state.planetVelSunM.y);
+              const pVelLen = _scratchV1.length() * vScale;
               if (pVelLen > 0.15) {
-                planetVelArrowRef.current.setDirection(pVel.clone().normalize());
+                _scratchV2.copy(_scratchV1).normalize();
+                planetVelArrowRef.current.setDirection(_scratchV2);
                 planetVelArrowRef.current.setLength(pVelLen, 0.5, 0.25);
-                planetVelArrowRef.current.position.copy(pPos).add(new THREE.Vector3(0, 0.35, 0));
+                planetVelArrowRef.current.position.copy(pPos);
+                planetVelArrowRef.current.position.y += 0.35;
                 planetVelArrowRef.current.visible = true;
               } else {
                 planetVelArrowRef.current.visible = false;
@@ -611,16 +641,17 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
             if (showGravityVectorRef.current) {
               const planetPos = isSunFrame && planetBundleRef.current
                 ? planetBundleRef.current.group.position
-                : new THREE.Vector3(0, 0, 0);
+                : _scratchV1.set(0, 0, 0);
 
-              const toPlanet = new THREE.Vector3().subVectors(planetPos, currentPosScene);
-              if (toPlanet.length() > 0.1) {
-                const gDir = toPlanet.clone().normalize();
+              _scratchV2.subVectors(planetPos, currentPosScene);
+              if (_scratchV2.length() > 0.1) {
+                _scratchV3.copy(_scratchV2).normalize();
                 const gMag = state.gravitationalAccelerationMPerS2;
                 const gLen = Math.max(0.6, Math.min(4.5, Math.sqrt(gMag) * 0.42));
-                gravityArrowRef.current.setDirection(gDir);
+                gravityArrowRef.current.setDirection(_scratchV3);
                 gravityArrowRef.current.setLength(gLen, 0.42, 0.2);
-                gravityArrowRef.current.position.copy(currentPosScene).add(new THREE.Vector3(0, 0.25, 0));
+                gravityArrowRef.current.position.copy(currentPosScene);
+                gravityArrowRef.current.position.y += 0.25;
                 gravityArrowRef.current.visible = true;
               } else {
                 gravityArrowRef.current.visible = false;
@@ -657,9 +688,10 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
             cam.position.set(desiredX, desiredY, desiredZ);
             currentLookAtRef.current.copy(currentPosScene);
           } else {
-            const trackRate = Math.min(1.0, dt * 14.0);
-            cam.position.lerp(new THREE.Vector3(desiredX, desiredY, desiredZ), trackRate);
-            currentLookAtRef.current.lerp(currentPosScene, trackRate);
+            const alpha = 1.0 - Math.exp(-14.0 * dt);
+            _scratchCamTarget.set(desiredX, desiredY, desiredZ);
+            cam.position.lerp(_scratchCamTarget, alpha);
+            currentLookAtRef.current.lerp(currentPosScene, alpha);
           }
           cam.lookAt(currentLookAtRef.current);
         } else if (mode === 'CLOSE_UP' && activeSim) {
@@ -676,8 +708,10 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
             cam.position.set(desiredX, desiredY, desiredZ);
             currentLookAtRef.current.copy(targetLookAtRef.current);
           } else {
-            cam.position.lerp(new THREE.Vector3(desiredX, desiredY, desiredZ), Math.min(1.0, dt * 8.0));
-            currentLookAtRef.current.lerp(targetLookAtRef.current, Math.min(1.0, dt * 8.0));
+            const alpha = 1.0 - Math.exp(-8.0 * dt);
+            _scratchCamTarget.set(desiredX, desiredY, desiredZ);
+            cam.position.lerp(_scratchCamTarget, alpha);
+            currentLookAtRef.current.lerp(targetLookAtRef.current, alpha);
           }
           cam.lookAt(currentLookAtRef.current);
         } else if (mode === 'OVERVIEW') {
@@ -690,8 +724,10 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
             cam.position.set(desiredX, desiredY, desiredZ);
             currentLookAtRef.current.set(0, 0, 0);
           } else {
-            cam.position.lerp(new THREE.Vector3(desiredX, desiredY, desiredZ), Math.min(1.0, dt * 8.0));
-            currentLookAtRef.current.lerp(targetLookAtRef.current, Math.min(1.0, dt * 8.0));
+            const alpha = 1.0 - Math.exp(-8.0 * dt);
+            _scratchCamTarget.set(desiredX, desiredY, desiredZ);
+            cam.position.lerp(_scratchCamTarget, alpha);
+            currentLookAtRef.current.lerp(targetLookAtRef.current, alpha);
           }
           cam.lookAt(currentLookAtRef.current);
         } else {
@@ -799,7 +835,16 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
     lastDrawnIdxRef.current = -1;
 
     // 1. Past Trajectory (Pastel Sky Blue, Solid)
-    const pastGeo = new THREE.BufferGeometry().setFromPoints(points.slice(0, 2));
+    // Pre-allocate typed buffer with (points.length + 1) capacity for zero GC during runtime
+    const pastPositions = new Float32Array((points.length + 1) * 3);
+    for (let i = 0; i < points.length; i++) {
+      pastPositions[i * 3] = points[i].x;
+      pastPositions[i * 3 + 1] = points[i].y;
+      pastPositions[i * 3 + 2] = points[i].z;
+    }
+    const pastGeo = new THREE.BufferGeometry();
+    pastGeo.setAttribute('position', new THREE.BufferAttribute(pastPositions, 3));
+    pastGeo.setDrawRange(0, 2);
     const pastMat = new THREE.LineBasicMaterial({
       color: simResult.collisionDetected ? 0xf87171 : 0x7bb6e8,
       linewidth: 2,
@@ -819,6 +864,7 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
     });
     const futureLine = new THREE.Line(futureGeo, futureMat);
     futureLine.computeLineDistances();
+    futureLine.geometry.setDrawRange(0, points.length);
     scene.add(futureLine);
     futureLineRef.current = futureLine;
 

@@ -70,13 +70,16 @@ export class TrajectoryInterpolator {
       return this.getEmptyState(timeS);
     }
 
+    // Handle potential NaN or non-finite time inputs safely
+    const safeTime = Number.isFinite(timeS) ? timeS : this.trajectory[0].timeS;
+
     // Clamp time to simulation boundaries and terminal collision time
     const maxAllowedTime = this.collisionDetected
       ? Math.min(this.collisionTimeS, this.trajectory[n - 1].timeS)
       : this.trajectory[n - 1].timeS;
 
-    const clampedTime = Math.max(this.trajectory[0].timeS, Math.min(maxAllowedTime, timeS));
-    const isTerminalImpact = this.collisionDetected && timeS >= this.collisionTimeS;
+    const clampedTime = Math.max(this.trajectory[0].timeS, Math.min(maxAllowedTime, safeTime));
+    const isTerminalImpact = this.collisionDetected && safeTime >= this.collisionTimeS;
 
     // Fast O(1) forward lookup with binary search fallback
     let idx = this.findSegmentIndex(clampedTime);

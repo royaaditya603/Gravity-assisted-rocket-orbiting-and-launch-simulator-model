@@ -23,6 +23,7 @@ import {
 } from '../../physics/FlybyScenario';
 import { Flyby3DCanvas, FlybyCameraMode } from './viewport/Flyby3DCanvas';
 import { Flyby2DCanvas } from './viewport/Flyby2DCanvas';
+import { GravityAssist2DSandbox } from './viewport/GravityAssist2DSandbox';
 import { FlybyControlDeck } from './controls/FlybyControlDeck';
 import { FlybySimulationToolbar, ViewFrameMode } from './controls/FlybySimulationToolbar';
 import { ParameterSensitivityDeck } from './controls/ParameterSensitivityDeck';
@@ -30,7 +31,7 @@ import { FlybyTelemetryHUD } from './hud/FlybyTelemetryHUD';
 import { FlybyCharts } from './charts/FlybyCharts';
 import { FlybyExperiments } from './experiments/FlybyExperiments';
 import { FlybyMissions } from './missions/FlybyMissions';
-import { Sparkles, Compass, ShieldAlert, Cpu, Sliders, ChevronDown, ChevronUp, TrendingUp, Orbit, LineChart } from 'lucide-react';
+import { Sparkles, Compass, ShieldAlert, Cpu, Sliders, ChevronDown, ChevronUp, TrendingUp, Orbit, LineChart, Layers } from 'lucide-react';
 import { GraphicsQuality } from './viewport/Flyby3DCanvas';
 
 export interface FlybySandboxProps {
@@ -409,168 +410,158 @@ export const FlybySandbox: React.FC<FlybySandboxProps> = ({
 
         {activeTab === 'SIMULATION' ? (
           <>
-            {/* 1. Simulation Toolbar */}
-            <FlybySimulationToolbar
-          viewportMode={viewportMode}
-          onChangeViewportMode={setViewportMode}
-          isPlaying={isPlaying}
-          onTogglePlay={handleTogglePlay}
-          onReset={handleReset}
-          onStep={handleStep}
-          playbackSpeed={playbackSpeed}
-          onChangePlaybackSpeed={setPlaybackSpeed}
-          currentStepIndex={currentPlaybackIndex}
-          totalSteps={simResult.trajectory.length}
-          currentTimeS={simResult.trajectory[currentPlaybackIndex]?.timeS ?? 0}
-          totalDurationS={simResult.totalDurationS}
-          onSeek={handleSeek}
-          periapsisTimeS={simResult.closestApproach.timeS}
-          collisionTimeS={simResult.collisionTimeS}
-          collisionDetected={simResult.collisionDetected}
-          viewFrameMode={viewFrameMode}
-          onChangeViewFrameMode={setViewFrameMode}
-          cameraMode={cameraMode}
-          onChangeCameraMode={setCameraMode}
-          onResetCamera={() => setCameraMode('OVERVIEW')}
-          showVectors={showVectors}
-          onToggleVectors={() => setShowVectors((prev) => !prev)}
-          showTrajectoryTrail={showTrajectoryTrail}
-          onToggleTrajectoryTrail={() => setShowTrajectoryTrail((prev) => !prev)}
-          isParamsCollapsed={isParamsCollapsed}
-          onToggleParamsCollapse={() => setIsParamsCollapsed((prev) => !prev)}
-        />
-
-        {/* 2. Trajectory Viewport (Single or Side-by-Side Split View; 2D Primary or 3D Optional) */}
-        <div className="w-full flex flex-col gap-3">
-          {viewportMode === '2D' ? (
-            viewFrameMode === 'SIDE_BY_SIDE' ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 w-full">
-                {/* Left Viewport: Planet-Relative Rest Frame */}
-                <Flyby2DCanvas
-                  simResult={simResult}
-                  currentPlaybackIndex={currentPlaybackIndex}
-                  referenceFrame="PLANET_CENTRIC"
-                  showVectors={showVectors}
-                  showTrajectoryTrail={showTrajectoryTrail}
-                  isPlaying={isPlaying}
-                  playbackSpeed={playbackSpeed}
-                  onPlaybackIndexChange={handleSeek}
-                  viewportMode={viewportMode}
-                  onChangeViewportMode={setViewportMode}
-                  title="PLANET-RELATIVE FRAME (||v_∞|| CONSERVED)"
-                  heightClass="h-[520px]"
-                />
-
-                {/* Right Viewport: Sun-Relative Heliocentric Frame */}
-                <Flyby2DCanvas
-                  simResult={simResult}
-                  currentPlaybackIndex={currentPlaybackIndex}
-                  referenceFrame="HELIOCENTRIC"
-                  showVectors={showVectors}
-                  showTrajectoryTrail={showTrajectoryTrail}
-                  isPlaying={isPlaying}
-                  playbackSpeed={playbackSpeed}
-                  onPlaybackIndexChange={handleSeek}
-                  viewportMode={viewportMode}
-                  onChangeViewportMode={setViewportMode}
-                  title="SUN-RELATIVE HELIOCENTRIC FRAME (MOMENTUM TRANSFER)"
-                  heightClass="h-[520px]"
-                />
-              </div>
+            {viewportMode === '2D' ? (
+              /* PRIMARY DEFAULT: 2D GRAVITY ASSIST SANDBOX (DUAL-FRAME SIDE-BY-SIDE) */
+              <GravityAssist2DSandbox
+                scenario={draftScenario}
+                simResult={simResult}
+                onUpdateScenario={handleUpdateDraft}
+                isPlaying={isPlaying}
+                onTogglePlay={handleTogglePlay}
+                onReset={handleReset}
+                playbackSpeed={playbackSpeed}
+                onChangePlaybackSpeed={setPlaybackSpeed}
+                currentPlaybackIndex={currentPlaybackIndex}
+                onPlaybackIndexChange={handleSeek}
+                viewportMode={viewportMode}
+                onChangeViewportMode={setViewportMode}
+              />
             ) : (
-              <Flyby2DCanvas
-                simResult={simResult}
-                currentPlaybackIndex={currentPlaybackIndex}
-                referenceFrame={activeReferenceFrame}
-                showVectors={showVectors}
-                showTrajectoryTrail={showTrajectoryTrail}
-                isPlaying={isPlaying}
-                playbackSpeed={playbackSpeed}
-                onPlaybackIndexChange={handleSeek}
-                onReferenceFrameChange={(f) => setViewFrameMode(f)}
-                viewportMode={viewportMode}
-                onChangeViewportMode={setViewportMode}
-                title={viewFrameMode === 'PLANET_CENTRIC' ? 'PLANET-CENTRIC REST FRAME' : 'HELIOCENTRIC SUN FRAME'}
-                heightClass="h-[580px]"
-              />
-            )
-          ) : viewFrameMode === 'SIDE_BY_SIDE' ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 w-full">
-              {/* Left Viewport: Planet-Relative Rest Frame */}
-              <Flyby3DCanvas
-                simResult={simResult}
-                currentPlaybackIndex={currentPlaybackIndex}
-                referenceFrame="PLANET_CENTRIC"
-                cameraMode={cameraMode}
-                showVectors={showVectors}
-                showTrajectoryTrail={showTrajectoryTrail}
-                isPlaying={isPlaying}
-                playbackSpeed={playbackSpeed}
-                onCameraChange={setCameraMode}
-                onPlaybackIndexChange={handleSeek}
-                graphicsQuality={graphicsQuality}
-                reducedMotion={reducedMotion}
-                spacecraftModel={spacecraftModel}
-                onChangeSpacecraftModel={onChangeSpacecraftModel}
-                viewportMode={viewportMode}
-                onChangeViewportMode={setViewportMode}
-                title="PLANET-RELATIVE FRAME (||v_∞|| CONSERVED)"
-                heightClass="h-[520px]"
-              />
+              /* OPTIONAL 3D VIEWPORT */
+              <div className="w-full flex flex-col gap-4">
+                {/* 3D Header with Centered Title & View Switcher */}
+                <div className="w-full flex flex-col items-center justify-center gap-3 py-2">
+                  <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[#263247] uppercase text-center">
+                    Gravity Assist Sandbox
+                  </h2>
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#DCE3EE] shadow-xs">
+                    <button
+                      onClick={() => setViewportMode('2D')}
+                      className="px-4 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer text-[#68758A] hover:text-[#263247] hover:bg-[#F0F4FA]"
+                    >
+                      <Compass size={14} />
+                      2D Simulation
+                    </button>
+                    <button
+                      onClick={() => setViewportMode('3D')}
+                      className="px-4 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer bg-[#10B981] text-white shadow-xs"
+                    >
+                      <Layers size={14} />
+                      3D Simulation
+                    </button>
+                  </div>
+                </div>
 
-              {/* Right Viewport: Sun-Relative Heliocentric Frame */}
-              <Flyby3DCanvas
-                simResult={simResult}
-                currentPlaybackIndex={currentPlaybackIndex}
-                referenceFrame="HELIOCENTRIC"
-                cameraMode={cameraMode}
-                showVectors={showVectors}
-                showTrajectoryTrail={showTrajectoryTrail}
-                isPlaying={isPlaying}
-                playbackSpeed={playbackSpeed}
-                onCameraChange={setCameraMode}
-                onPlaybackIndexChange={handleSeek}
-                graphicsQuality={graphicsQuality}
-                reducedMotion={reducedMotion}
-                spacecraftModel={spacecraftModel}
-                onChangeSpacecraftModel={onChangeSpacecraftModel}
-                viewportMode={viewportMode}
-                onChangeViewportMode={setViewportMode}
-                title="SUN-RELATIVE HELIOCENTRIC FRAME (MOMENTUM TRANSFER)"
-                heightClass="h-[520px]"
-              />
-            </div>
-          ) : (
-            <Flyby3DCanvas
+                {/* 3D Simulation Toolbar */}
+                <FlybySimulationToolbar
+                  viewportMode={viewportMode}
+                  onChangeViewportMode={setViewportMode}
+                  isPlaying={isPlaying}
+                  onTogglePlay={handleTogglePlay}
+                  onReset={handleReset}
+                  onStep={handleStep}
+                  playbackSpeed={playbackSpeed}
+                  onChangePlaybackSpeed={setPlaybackSpeed}
+                  currentStepIndex={currentPlaybackIndex}
+                  totalSteps={simResult.trajectory.length}
+                  currentTimeS={simResult.trajectory[currentPlaybackIndex]?.timeS ?? 0}
+                  totalDurationS={simResult.totalDurationS}
+                  onSeek={handleSeek}
+                  periapsisTimeS={simResult.closestApproach.timeS}
+                  collisionTimeS={simResult.collisionTimeS}
+                  collisionDetected={simResult.collisionDetected}
+                  viewFrameMode={viewFrameMode}
+                  onChangeViewFrameMode={setViewFrameMode}
+                  cameraMode={cameraMode}
+                  onChangeCameraMode={setCameraMode}
+                  onResetCamera={() => setCameraMode('OVERVIEW')}
+                  showVectors={showVectors}
+                  onToggleVectors={() => setShowVectors((prev) => !prev)}
+                  showTrajectoryTrail={showTrajectoryTrail}
+                  onToggleTrajectoryTrail={() => setShowTrajectoryTrail((prev) => !prev)}
+                  isParamsCollapsed={isParamsCollapsed}
+                  onToggleParamsCollapse={() => setIsParamsCollapsed((prev) => !prev)}
+                />
+
+                {/* 3D Canvas Viewport */}
+                {viewFrameMode === 'SIDE_BY_SIDE' ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 w-full">
+                    <Flyby3DCanvas
+                      simResult={simResult}
+                      currentPlaybackIndex={currentPlaybackIndex}
+                      referenceFrame="PLANET_CENTRIC"
+                      cameraMode={cameraMode}
+                      showVectors={showVectors}
+                      showTrajectoryTrail={showTrajectoryTrail}
+                      isPlaying={isPlaying}
+                      playbackSpeed={playbackSpeed}
+                      onCameraChange={setCameraMode}
+                      onPlaybackIndexChange={handleSeek}
+                      isClockMaster={true}
+                      graphicsQuality={graphicsQuality}
+                      reducedMotion={reducedMotion}
+                      spacecraftModel={spacecraftModel}
+                      onChangeSpacecraftModel={onChangeSpacecraftModel}
+                      viewportMode={viewportMode}
+                      onChangeViewportMode={setViewportMode}
+                      title="PLANET-RELATIVE FRAME (||v_∞|| CONSERVED)"
+                      heightClass="h-[520px]"
+                    />
+
+                    <Flyby3DCanvas
+                      simResult={simResult}
+                      currentPlaybackIndex={currentPlaybackIndex}
+                      referenceFrame="HELIOCENTRIC"
+                      cameraMode={cameraMode}
+                      showVectors={showVectors}
+                      showTrajectoryTrail={showTrajectoryTrail}
+                      isPlaying={isPlaying}
+                      playbackSpeed={playbackSpeed}
+                      onCameraChange={setCameraMode}
+                      onPlaybackIndexChange={handleSeek}
+                      isClockMaster={false}
+                      graphicsQuality={graphicsQuality}
+                      reducedMotion={reducedMotion}
+                      spacecraftModel={spacecraftModel}
+                      onChangeSpacecraftModel={onChangeSpacecraftModel}
+                      viewportMode={viewportMode}
+                      onChangeViewportMode={setViewportMode}
+                      title="SUN-RELATIVE HELIOCENTRIC FRAME (MOMENTUM TRANSFER)"
+                      heightClass="h-[520px]"
+                    />
+                  </div>
+                ) : (
+                  <Flyby3DCanvas
+                    simResult={simResult}
+                    currentPlaybackIndex={currentPlaybackIndex}
+                    referenceFrame={activeReferenceFrame}
+                    cameraMode={cameraMode}
+                    showVectors={showVectors}
+                    showTrajectoryTrail={showTrajectoryTrail}
+                    isPlaying={isPlaying}
+                    playbackSpeed={playbackSpeed}
+                    onCameraChange={setCameraMode}
+                    onReferenceFrameChange={(f) => setViewFrameMode(f)}
+                    onPlaybackIndexChange={handleSeek}
+                    graphicsQuality={graphicsQuality}
+                    reducedMotion={reducedMotion}
+                    spacecraftModel={spacecraftModel}
+                    onChangeSpacecraftModel={onChangeSpacecraftModel}
+                    viewportMode={viewportMode}
+                    onChangeViewportMode={setViewportMode}
+                    title={viewFrameMode === 'PLANET_CENTRIC' ? 'PLANET-CENTRIC REST FRAME' : 'HELIOCENTRIC SUN FRAME'}
+                    heightClass="h-[580px]"
+                  />
+                )}
+              </div>
+            )}
+
+            {/* 3. Live Telemetry Panel */}
+            <FlybyTelemetryHUD
               simResult={simResult}
               currentPlaybackIndex={currentPlaybackIndex}
               referenceFrame={activeReferenceFrame}
-              cameraMode={cameraMode}
-              showVectors={showVectors}
-              showTrajectoryTrail={showTrajectoryTrail}
-              isPlaying={isPlaying}
-              playbackSpeed={playbackSpeed}
-              onCameraChange={setCameraMode}
-              onReferenceFrameChange={(f) => setViewFrameMode(f)}
-              onPlaybackIndexChange={handleSeek}
-              graphicsQuality={graphicsQuality}
-              reducedMotion={reducedMotion}
-              spacecraftModel={spacecraftModel}
-              onChangeSpacecraftModel={onChangeSpacecraftModel}
-              viewportMode={viewportMode}
-              onChangeViewportMode={setViewportMode}
-              title={viewFrameMode === 'PLANET_CENTRIC' ? 'PLANET-CENTRIC REST FRAME' : 'HELIOCENTRIC SUN FRAME'}
-              heightClass="h-[580px]"
             />
-          )}
-
-          {/* 3. Live Telemetry Panel */}
-          <FlybyTelemetryHUD
-            simResult={simResult}
-            currentPlaybackIndex={currentPlaybackIndex}
-            referenceFrame={activeReferenceFrame}
-          />
-        </div>
 
         {/* 4. Collapsible Parameter Panel */}
         <div id="flyby-parameters" className="w-full">

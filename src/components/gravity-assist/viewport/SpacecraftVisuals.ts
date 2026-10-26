@@ -44,6 +44,15 @@ export interface SpacecraftBundle {
   dispose: () => void;
 }
 
+// Scratch objects to eliminate per-frame allocations & GC pressure
+const _scForward = new THREE.Vector3();
+const _scUp = new THREE.Vector3();
+const _scRight = new THREE.Vector3();
+const _scRealUp = new THREE.Vector3();
+const _scRotMat = new THREE.Matrix4();
+const _scToSun = new THREE.Vector3();
+const _scAxisY = new THREE.Vector3(0, 1, 0);
+
 export class SpacecraftVisuals {
   public static create(
     scale: number = 1.0,
@@ -76,7 +85,7 @@ export class SpacecraftVisuals {
     const currentQuat = new THREE.Quaternion();
     const targetQuat = new THREE.Quaternion();
 
-    // UPDATE METHOD
+    // UPDATE METHOD (Zero Heap Allocations in Render Loop)
     const update = (
       pos: THREE.Vector3,
       vel: THREE.Vector3,
@@ -89,46 +98,47 @@ export class SpacecraftVisuals {
       if (currentModelType === 'ROCKET') {
         // Rocket longitudinal axis (+Z or flight direction) aligns along velocity vector
         if (vel.lengthSq() > 1e-4) {
-          const forward = vel.clone().normalize();
-          const up = new THREE.Vector3(0, 1, 0);
-          if (Math.abs(forward.dot(up)) > 0.95) {
-            up.set(1, 0, 0);
+          _scForward.copy(vel).normalize();
+          _scUp.set(0, 1, 0);
+          if (Math.abs(_scForward.dot(_scUp)) > 0.95) {
+            _scUp.set(1, 0, 0);
           }
-          const right = new THREE.Vector3().crossVectors(forward, up).normalize();
-          const realUp = new THREE.Vector3().crossVectors(right, forward).normalize();
+          _scRight.crossVectors(_scForward, _scUp).normalize();
+          _scRealUp.crossVectors(_scRight, _scForward).normalize();
           // Rocket nose points along flight direction (+forward)
-          const rotMat = new THREE.Matrix4().makeBasis(right, realUp, forward);
-          targetQuat.setFromRotationMatrix(rotMat);
+          _scRotMat.makeBasis(_scRight, _scRealUp, _scForward);
+          targetQuat.setFromRotationMatrix(_scRotMat);
         }
       } else {
         // Calculate target orientation based on probe attitude mode
         if (mode === 'VELOCITY_ALIGNED' && vel.lengthSq() > 1e-4) {
-          const forward = vel.clone().normalize();
-          const up = new THREE.Vector3(0, 1, 0);
-          if (Math.abs(forward.dot(up)) > 0.95) {
-            up.set(1, 0, 0);
+          _scForward.copy(vel).normalize();
+          _scUp.set(0, 1, 0);
+          if (Math.abs(_scForward.dot(_scUp)) > 0.95) {
+            _scUp.set(1, 0, 0);
           }
-          const right = new THREE.Vector3().crossVectors(forward, up).normalize();
-          const realUp = new THREE.Vector3().crossVectors(right, forward).normalize();
-          const rotMat = new THREE.Matrix4().makeBasis(right, realUp, forward.negate());
-          targetQuat.setFromRotationMatrix(rotMat);
+          _scRight.crossVectors(_scForward, _scUp).normalize();
+          _scRealUp.crossVectors(_scRight, _scForward).normalize();
+          _scForward.negate();
+          _scRotMat.makeBasis(_scRight, _scRealUp, _scForward);
+          targetQuat.setFromRotationMatrix(_scRotMat);
         } else if (mode === 'SUN_POINTING') {
           // High-Gain Antenna points directly toward Sun (or Earth)
-          const toSun = new THREE.Vector3().subVectors(sunPos, pos).normalize();
-          const up = new THREE.Vector3(0, 0, 1);
-          const right = new THREE.Vector3().crossVectors(toSun, up).normalize();
-          const realUp = new THREE.Vector3().crossVectors(right, toSun).normalize();
-          const rotMat = new THREE.Matrix4().makeBasis(right, toSun, realUp);
-          targetQuat.setFromRotationMatrix(rotMat);
+          _scToSun.subVectors(sunPos, pos).normalize();
+          _scUp.set(0, 0, 1);
+          _scRight.crossVectors(_scToSun, _scUp).normalize();
+          _scRealUp.crossVectors(_scRight, _scToSun).normalize();
+          _scRotMat.makeBasis(_scRight, _scToSun, _scRealUp);
+          targetQuat.setFromRotationMatrix(_scRotMat);
         } else {
           // Inertially fixed attitude (slow galactic roll)
-          targetQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.35);
+          targetQuat.setFromAxisAngle(_scAxisY, 0.35);
         }
       }
 
-      // Smooth Quaternion SLERP (eliminates discrete angle snapping)
-      const slerpFactor = Math.min(1.0, Math.max(0.05, dt * 6.0));
-      currentQuat.slerp(targetQuat, slerpFactor);
+      // Smooth Quaternion SLERP with frame-rate independent exponential damping
+      const slerpFactor = 1.0 - Math.exp(-6.0 * dt);
+      currentQuat.slerp(targetQuat, Math.max(0.05, Math.min(1.0, slerpFactor)));
       group.quaternion.copy(currentQuat);
     };
 
