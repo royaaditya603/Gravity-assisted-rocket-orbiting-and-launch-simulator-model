@@ -6,7 +6,11 @@ export * from './OrbitClassifier';
 export * from './CollisionDetector';
 export * from './Integrators';
 export * from './GravityAssist';
+export * from './CoordinateFrames';
+export * from './FlybyDiagnostics';
 export * from './FlybyEngine';
 export * from './FlybyScenario';
 export * from './HistoricalEphemeris';
 export * from './FlybyExperimentEngine';
+export * from './contracts';
+

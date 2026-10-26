@@ -1,23 +1,56 @@
-import { Vector3D, IVector3D } from './Vector3D';
+import { Vector3D, type IVector3D } from './Vector3D';
 import { PlanetaryBodyData, PLANETARY_BODIES, MU_SUN } from './constants';
+import { CoordinateFrames } from './CoordinateFrames';
+import { FlybyDiagnostics, FlybyConvergenceDiagnostics } from './FlybyDiagnostics';
 
+export { Vector3D, type IVector3D };
 export type FlybyPassType = 'TRAILING' | 'LEADING';
 export type SimulationStatus = 'INITIALIZED' | 'RUNNING' | 'COMPLETED' | 'COLLIDED';
 export type ReferenceFrame = 'PLANET_CENTRIC' | 'HELIOCENTRIC';
 
+/**
+ * Initial spacecraft state in planet-centric frame
+ */
+export interface InitialSpacecraftState {
+  posPlanetM: Vector3D | IVector3D;
+  velPlanetMPerS: Vector3D | IVector3D;
+}
+
+/**
+ * Configuration parameters for hyperbolic flyby calculations
+ */
 export interface FlybyInitialConditions {
   planet: PlanetaryBodyData;
   vInfSpeedMPerS: number; // Asymptotic incoming hyperbolic excess speed (m/s)
   approachAngleDeg?: number; // In-plane approach direction (default: 0 degrees, along +X)
-  // Encounter distance specification: user can supply either target periapsis or impact parameter
+  // Encounter distance specification: user can supply target periapsis, impact parameter, or flyby altitude
   targetPeriapsisM?: number;
   impactParameterM?: number;
+  flybyAltitudeM?: number;
   passType: FlybyPassType;
   spacecraftMassKg: number;
   // Optional custom kinematics and trajectory modes:
-  planetVelocityVectorMPerS?: Vector3D;
+  planetVelocityVectorMPerS?: Vector3D | IVector3D;
   planetInitialPhaseDeg?: number;
   simulationDurationS?: number;
+  simulationWindowStartS?: number;
+  fixedTimeStepS?: number;
+  numericalTolerance?: number;
+  customInitialState?: InitialSpacecraftState;
+  trajectoryMode?: 'NUMERICAL_RK4' | 'ANALYTICAL_IDEAL';
+}
+
+/**
+ * Numerical integration and simulation execution options
+ */
+export interface NumericalIntegrationOptions {
+  maxPoints?: number;
+  entryDistanceMultiple?: number;
+  timeStepCoeff?: number;
+  fixedTimeStepS?: number;
+  numericalTolerance?: number;
+  simulationDurationS?: number;
+  simulationWindowStartS?: number;
   trajectoryMode?: 'NUMERICAL_RK4' | 'ANALYTICAL_IDEAL';
 }
 
@@ -108,6 +141,13 @@ export interface FlybySimulationResult {
   collisionTimeS?: number;
   collisionPositionPlanetM?: Vector3D;
   totalDurationS: number;
+  flybyDurationS: number;
+  peakGravitationalAccelerationMPerS2: number;
+  peakGravitationalAccelerationG0: number;
+  sunRelativeDeltaVSpeedMPerS: number;
+  sunRelativeDeltaVVectorMPerS: Vector3D;
+  sunRelativeDeltaSpecificEnergyJPerKg: number;
+  convergenceDiagnostics?: FlybyConvergenceDiagnostics;
 }
 
 /**
@@ -127,7 +167,8 @@ export class FlybyEngine {
    * e = 1 + (r_p * v_inf² / mu)
    */
   static eccentricityFromPeriapsis(rpM: number, vInfMPerS: number, muPlanet: number): number {
-    if (vInfMPerS <= 0 || muPlanet <= 0 || rpM <= 0) return 1.0;
+    if (muPlanet <= 0) return Infinity; // No gravity -> straight-line unaccelerated motion
+    if (vInfMPerS <= 0 || rpM <= 0) return 1.0;
     return 1.0 + (rpM * vInfMPerS * vInfMPerS) / muPlanet;
   }
 
@@ -136,7 +177,8 @@ export class FlybyEngine {
    * delta = 2 * asin(1 / e)
    */
   static deflectionFromEccentricity(e: number): number {
-    if (e <= 1.0) return Math.PI; // Parabolic limit / maximum deflection
+    if (e <= 1.0) return Math.PI; // Parabolic limit / radial plunge 180 deg
+    if (!isFinite(e) || e > 1e12) return 0.0; // Straight line motion (zero-gravity limit)
     return 2.0 * Math.asin(1.0 / e);
   }
 
@@ -145,7 +187,8 @@ export class FlybyEngine {
    * b = (mu / v_inf²) * sqrt(e² - 1)
    */
   static impactParameterFromEccentricity(e: number, vInfMPerS: number, muPlanet: number): number {
-    if (vInfMPerS <= 0 || muPlanet <= 0 || e <= 1.0) return 0;
+    if (vInfMPerS <= 0 || e <= 1.0) return 0;
+    if (muPlanet <= 0 || !isFinite(e)) return 0;
     const charLen = muPlanet / (vInfMPerS * vInfMPerS);
     return charLen * Math.sqrt(e * e - 1.0);
   }
@@ -157,7 +200,9 @@ export class FlybyEngine {
    * (Equivalent to b = r_p * sqrt(1 + 2 * mu / (r_p * v_inf²)))
    */
   static periapsisToImpactParameter(rpM: number, vInfMPerS: number, muPlanet: number): number {
-    if (rpM <= 0 || vInfMPerS <= 0 || muPlanet <= 0) return 0;
+    if (rpM <= 0) return 0;
+    if (muPlanet <= 0) return rpM; // No gravity -> impact parameter equals closest approach
+    if (vInfMPerS <= 0) return rpM;
     const e = FlybyEngine.eccentricityFromPeriapsis(rpM, vInfMPerS, muPlanet);
     return FlybyEngine.impactParameterFromEccentricity(e, vInfMPerS, muPlanet);
   }
@@ -167,7 +212,9 @@ export class FlybyEngine {
    * r_p = - (mu / v_inf²) + sqrt((mu / v_inf²)² + b²)
    */
   static impactParameterToPeriapsis(bM: number, vInfMPerS: number, muPlanet: number): number {
-    if (vInfMPerS <= 0 || muPlanet <= 0 || bM <= 0) return 0;
+    if (bM <= 0) return 0;
+    if (muPlanet <= 0) return bM; // No gravity -> closest approach equals impact parameter
+    if (vInfMPerS <= 0) return bM;
     const charLen = muPlanet / (vInfMPerS * vInfMPerS);
     return -charLen + Math.sqrt(charLen * charLen + bM * bM);
   }
@@ -183,9 +230,12 @@ export class FlybyEngine {
     let rpM = config.targetPeriapsisM;
     let bM = config.impactParameterM;
 
-    if (rpM !== undefined && rpM > 0) {
+    if (rpM !== undefined && rpM >= 0) {
       bM = FlybyEngine.periapsisToImpactParameter(rpM, vInfSpeedMPerS, muP);
-    } else if (bM !== undefined && bM > 0) {
+    } else if (config.flybyAltitudeM !== undefined) {
+      rpM = Rp + config.flybyAltitudeM;
+      bM = FlybyEngine.periapsisToImpactParameter(rpM, vInfSpeedMPerS, muP);
+    } else if (bM !== undefined && bM >= 0) {
       rpM = FlybyEngine.impactParameterToPeriapsis(bM, vInfSpeedMPerS, muP);
     } else {
       // Default to 1.5 planetary radii if unspecified
@@ -196,10 +246,34 @@ export class FlybyEngine {
     const hpM = rpM - Rp;
     const isPhysicalCollision = rpM <= Rp;
 
+    let effVInf = vInfSpeedMPerS;
+    if (config.customInitialState) {
+      const posInit = config.customInitialState.posPlanetM instanceof Vector3D
+        ? config.customInitialState.posPlanetM
+        : new Vector3D(config.customInitialState.posPlanetM.x, config.customInitialState.posPlanetM.y, config.customInitialState.posPlanetM.z);
+      const velInit = config.customInitialState.velPlanetMPerS instanceof Vector3D
+        ? config.customInitialState.velPlanetMPerS
+        : new Vector3D(config.customInitialState.velPlanetMPerS.x, config.customInitialState.velPlanetMPerS.y, config.customInitialState.velPlanetMPerS.z);
+      const r0 = posInit.magnitude();
+      const v0 = velInit.magnitude();
+      if (r0 > 0 && muP > 0) {
+        const specEnergy = 0.5 * v0 * v0 - muP / r0;
+        if (specEnergy > 0) {
+          effVInf = Math.sqrt(2.0 * specEnergy);
+          const hVec = posInit.clone().cross(velInit);
+          const hMag = hVec.magnitude();
+          const p = (hMag * hMag) / muP;
+          const ecc = Math.sqrt(Math.max(1.0, 1.0 + (2.0 * specEnergy * hMag * hMag) / (muP * muP)));
+          rpM = p / (1.0 + ecc);
+          bM = effVInf > 0 ? hMag / effVInf : bM;
+        }
+      }
+    }
+
     // Hyperbolic orbital elements
-    const charLen = muP / (vInfSpeedMPerS * vInfSpeedMPerS);
-    const eccentricity = FlybyEngine.eccentricityFromPeriapsis(rpM, vInfSpeedMPerS, muP);
-    const semiMajorAxisM = -charLen; // Negative semi-major axis for hyperbola
+    const charLen = muP > 0 && effVInf > 0 ? muP / (effVInf * effVInf) : 0;
+    const eccentricity = FlybyEngine.eccentricityFromPeriapsis(rpM, effVInf, muP);
+    const semiMajorAxisM = muP > 0 ? -charLen : -Infinity;
 
     // Turning angle delta: sin(delta / 2) = 1 / e
     const deltaRad = FlybyEngine.deflectionFromEccentricity(eccentricity);
@@ -208,10 +282,12 @@ export class FlybyEngine {
     // Planet velocity in Sun frame:
     // If custom velocity vector specified, use it; otherwise use circular orbital speed along +Y
     const vPlanetSun = config.planetVelocityVectorMPerS
-      ? config.planetVelocityVectorMPerS.clone()
+      ? (config.planetVelocityVectorMPerS instanceof Vector3D
+          ? config.planetVelocityVectorMPerS.clone()
+          : new Vector3D(config.planetVelocityVectorMPerS.x, config.planetVelocityVectorMPerS.y, config.planetVelocityVectorMPerS.z))
       : planet.customVelocityMPerS
       ? new Vector3D(planet.customVelocityMPerS.x, planet.customVelocityMPerS.y, planet.customVelocityMPerS.z)
-      : new Vector3D(0, planet.orbitalSpeedMPerS, 0);
+      : new Vector3D(0, planet.orbitalSpeedMPerS ?? 0, 0);
     const VpMag = vPlanetSun.magnitude();
 
     // Incoming asymptote vector v_inf(-)
@@ -219,7 +295,7 @@ export class FlybyEngine {
     const approachAngleRad = ((config.approachAngleDeg || 0) * Math.PI) / 180.0;
     const cosApp = Math.cos(approachAngleRad);
     const sinApp = Math.sin(approachAngleRad);
-    const vInfMinus = new Vector3D(vInfSpeedMPerS * cosApp, vInfSpeedMPerS * sinApp, 0);
+    const vInfMinus = new Vector3D(effVInf * cosApp, effVInf * sinApp, 0);
 
     // In-plane rotation:
     // Trailing pass: Spacecraft passes behind planet, rotated toward planet velocity (+Y)
@@ -237,7 +313,7 @@ export class FlybyEngine {
       0
     );
     // Ensure strict numerical conservation of magnitude
-    vInfPlus.normalize().scale(vInfSpeedMPerS);
+    vInfPlus.normalize().scale(effVInf);
 
     // Delta-v vector in planet frame (and Sun frame, since V_p cancels)
     const deltaVVector = new Vector3D(
@@ -316,13 +392,7 @@ export class FlybyEngine {
    */
   static runSimulation(
     config: FlybyInitialConditions,
-    options?: {
-      maxPoints?: number;
-      entryDistanceMultiple?: number;
-      timeStepCoeff?: number;
-      simulationDurationS?: number;
-      trajectoryMode?: 'NUMERICAL_RK4' | 'ANALYTICAL_IDEAL';
-    }
+    options?: NumericalIntegrationOptions
   ): FlybySimulationResult {
     const analytical = FlybyEngine.computeAnalytical(config);
     const { planet, vInfSpeedMPerS, passType, spacecraftMassKg } = config;
@@ -333,63 +403,100 @@ export class FlybyEngine {
 
     // Establish start distance: far enough for asymptote to be valid (15 to 25 * rp, or at least 15 * Rp)
     const entryMult = options?.entryDistanceMultiple ?? 20.0;
-    const rStart = Math.max(rpM * entryMult, Rp * 15.0);
+    let rStart = Math.max(rpM * entryMult, Rp * 15.0);
 
-    // Exact Keplerian Hyperbolic State Initialization:
-    // Semi-major axis (negative): a = -mu_p / v_inf²
-    const aHyp = -muP / (vInfSpeedMPerS * vInfSpeedMPerS);
-    const eHyp = 1.0 - rpM / aHyp;
-    const pHyp = rpM * (1.0 + eHyp);
+    // State Initialization:
+    let pos: Vector3D;
+    let vel: Vector3D;
 
-    // True anomaly at starting distance rStart:
-    // r = p / (1 + e * cos(nu)) => cos(nu) = (p / r - 1) / e
-    const cosNuStart = Math.max(-1.0, Math.min(1.0, (pHyp / rStart - 1.0) / eHyp));
-    const nuStart = -Math.acos(cosNuStart); // Negative because incoming towards periapsis
+    if (config.customInitialState) {
+      pos = config.customInitialState.posPlanetM instanceof Vector3D
+        ? config.customInitialState.posPlanetM.clone()
+        : new Vector3D(config.customInitialState.posPlanetM.x, config.customInitialState.posPlanetM.y, config.customInitialState.posPlanetM.z);
+      vel = config.customInitialState.velPlanetMPerS instanceof Vector3D
+        ? config.customInitialState.velPlanetMPerS.clone()
+        : new Vector3D(config.customInitialState.velPlanetMPerS.x, config.customInitialState.velPlanetMPerS.y, config.customInitialState.velPlanetMPerS.z);
+      rStart = Math.max(pos.magnitude(), Rp * 15.0);
+    } else if (muP <= 0) {
+      // Case 1: Zero-Gravity Limit (straight-line unaccelerated motion)
+      const appAngleRad = ((config.approachAngleDeg || 0) * Math.PI) / 180.0;
+      const cosApp = Math.cos(appAngleRad);
+      const sinApp = Math.sin(appAngleRad);
+      const offsetSign = passType === 'TRAILING' ? -1.0 : 1.0;
+      const offsetDist = bM;
+      // Perpendicular offset vector to approach direction
+      pos = new Vector3D(
+        -rStart * cosApp + offsetSign * offsetDist * (-sinApp),
+        -rStart * sinApp + offsetSign * offsetDist * cosApp,
+        0
+      );
+      vel = new Vector3D(vInfSpeedMPerS * cosApp, vInfSpeedMPerS * sinApp, 0);
+    } else if (rpM <= 0 || bM <= 0) {
+      // Case 2: Zero-Impact-Parameter Limiting Case (direct radial plunge towards planet center)
+      const appAngleRad = ((config.approachAngleDeg || 0) * Math.PI) / 180.0;
+      const cosApp = Math.cos(appAngleRad);
+      const sinApp = Math.sin(appAngleRad);
+      pos = new Vector3D(-rStart * cosApp, -rStart * sinApp, 0);
+      const vRadial = Math.sqrt(vInfSpeedMPerS * vInfSpeedMPerS + (2.0 * muP) / rStart);
+      vel = new Vector3D(vRadial * cosApp, vRadial * sinApp, 0);
+    } else {
+      // Case 3: Regular Keplerian Hyperbolic State Initialization
+      const aHyp = -muP / (vInfSpeedMPerS * vInfSpeedMPerS);
+      const eHyp = 1.0 - rpM / aHyp;
+      const pHyp = rpM * (1.0 + eHyp);
 
-    // Coordinates in perifocal frame (where periapsis is at nu = 0 along +X):
-    let xw = rStart * Math.cos(nuStart);
-    let yw = rStart * Math.sin(nuStart);
-    let vxw = -Math.sqrt(muP / pHyp) * Math.sin(nuStart);
-    let vyw = Math.sqrt(muP / pHyp) * (eHyp + Math.cos(nuStart));
+      // True anomaly at starting distance rStart:
+      // r = p / (1 + e * cos(nu)) => cos(nu) = (p / r - 1) / e
+      const cosNuStart = Math.max(-1.0, Math.min(1.0, (pHyp / rStart - 1.0) / eHyp));
+      const nuStart = -Math.acos(cosNuStart); // Negative because incoming towards periapsis
 
-    // For leading pass, invert encounter orientation (clockwise deflection)
-    if (passType === 'LEADING') {
-      yw = -yw;
-      vyw = -vyw;
+      // Coordinates in perifocal frame (where periapsis is at nu = 0 along +X):
+      let xw = rStart * Math.cos(nuStart);
+      let yw = rStart * Math.sin(nuStart);
+      let vxw = -Math.sqrt(muP / pHyp) * Math.sin(nuStart);
+      let vyw = Math.sqrt(muP / pHyp) * (eHyp + Math.cos(nuStart));
+
+      // For leading pass, invert encounter orientation (clockwise deflection)
+      if (passType === 'LEADING') {
+        yw = -yw;
+        vyw = -vyw;
+      }
+
+      // Angle of incoming asymptote in perifocal frame:
+      const thetaInf = Math.acos(-1.0 / eHyp);
+      const phiIn = passType === 'TRAILING' ? thetaInf - Math.PI / 2.0 : -(thetaInf - Math.PI / 2.0);
+
+      // Approach angle relative to central frame (default: 0 degrees, incoming along +X):
+      const appAngleRad = ((config.approachAngleDeg || 0) * Math.PI) / 180.0;
+      const rotPsi = appAngleRad - phiIn;
+
+      const cosPsi = Math.cos(rotPsi);
+      const sinPsi = Math.sin(rotPsi);
+
+      // Rotate into simulation planet-centric frame
+      pos = new Vector3D(
+        xw * cosPsi - yw * sinPsi,
+        xw * sinPsi + yw * cosPsi,
+        0
+      );
+      vel = new Vector3D(
+        vxw * cosPsi - vyw * sinPsi,
+        vxw * sinPsi + vyw * cosPsi,
+        0
+      );
     }
-
-    // Angle of incoming asymptote in perifocal frame:
-    const thetaInf = Math.acos(-1.0 / eHyp);
-    const phiIn = passType === 'TRAILING' ? thetaInf - Math.PI / 2.0 : -(thetaInf - Math.PI / 2.0);
-
-    // Approach angle relative to central frame (default: 0 degrees, incoming along +X):
-    const appAngleRad = ((config.approachAngleDeg || 0) * Math.PI) / 180.0;
-    const rotPsi = appAngleRad - phiIn;
-
-    const cosPsi = Math.cos(rotPsi);
-    const sinPsi = Math.sin(rotPsi);
-
-    // Rotate into simulation planet-centric frame
-    let pos = new Vector3D(
-      xw * cosPsi - yw * sinPsi,
-      xw * sinPsi + yw * cosPsi,
-      0
-    );
-    let vel = new Vector3D(
-      vxw * cosPsi - vyw * sinPsi,
-      vxw * sinPsi + vyw * cosPsi,
-      0
-    );
 
     // Sun frame parameters
     const vPlanetCustom = config.planetVelocityVectorMPerS
-      ? config.planetVelocityVectorMPerS.clone()
+      ? (config.planetVelocityVectorMPerS instanceof Vector3D
+          ? config.planetVelocityVectorMPerS.clone()
+          : new Vector3D(config.planetVelocityVectorMPerS.x, config.planetVelocityVectorMPerS.y, config.planetVelocityVectorMPerS.z))
       : planet.customVelocityMPerS
       ? new Vector3D(planet.customVelocityMPerS.x, planet.customVelocityMPerS.y, planet.customVelocityMPerS.z)
       : undefined;
 
-    const aPlanet = planet.semiMajorAxisM;
-    const VpMag = vPlanetCustom ? vPlanetCustom.magnitude() : planet.orbitalSpeedMPerS;
+    const aPlanet = planet.semiMajorAxisM ?? 0;
+    const VpMag = vPlanetCustom ? vPlanetCustom.magnitude() : (planet.orbitalSpeedMPerS ?? 0);
     const omegaP = aPlanet > 0 ? VpMag / aPlanet : 0; // Angular rate around Sun (rad/s)
     const initialPhaseRad = ((config.planetInitialPhaseDeg || 0) * Math.PI) / 180.0;
 
@@ -419,14 +526,14 @@ export class FlybyEngine {
     const trajectory: TrajectoryPoint[] = [];
     const maxPoints = options?.maxPoints ?? 1500;
 
-    let timeS = 0.0;
+    let timeS = options?.simulationWindowStartS ?? config.simulationWindowStartS ?? 0.0;
     let collisionDetected = false;
     let collisionTimeS: number | undefined;
     let collisionPosition: Vector3D | undefined;
 
     let minDistance = Infinity;
     let closestApproach: ClosestApproachData = {
-      timeS: 0,
+      timeS: timeS,
       distanceM: Infinity,
       altitudeM: Infinity,
       speedPlanetMPerS: 0,
@@ -436,16 +543,25 @@ export class FlybyEngine {
     };
 
     // Total expected flyby time scale ~ 2 * rStart / vInf
-    const timeScaleApprox = (2.5 * rStart) / vInfSpeedMPerS;
-    const maxSimTime =
+    const effectiveVInf = Math.max(100.0, vInfSpeedMPerS);
+    const timeScaleApprox = (2.5 * rStart) / effectiveVInf;
+    const duration =
       options?.simulationDurationS && options.simulationDurationS > 0
         ? options.simulationDurationS
+        : config.simulationDurationS && config.simulationDurationS > 0
+        ? config.simulationDurationS
         : timeScaleApprox * 3;
-    // Step coefficient: smaller near periapsis
-    const eta = options?.timeStepCoeff ?? 0.015;
+    const maxSimTime = timeS + duration;
+
+    // Numerical step and tolerance controls
+    const baseEta = options?.timeStepCoeff ?? 0.015;
+    const tol = options?.numericalTolerance ?? config.numericalTolerance;
+    const eta = tol && tol > 0 ? Math.max(0.001, Math.min(0.2, baseEta * Math.sqrt(tol * 100))) : baseEta;
+    const fixedDt = options?.fixedTimeStepS ?? config.fixedTimeStepS;
 
     // Helper to evaluate gravitational acceleration in planet frame
     const getAccel = (p: Vector3D): Vector3D => {
+      if (muP <= 0) return new Vector3D(0, 0, 0);
       const r = p.magnitude();
       if (r < 1.0) return new Vector3D(0, 0, 0);
       const factor = -muP / (r * r * r);
@@ -540,11 +656,13 @@ export class FlybyEngine {
         break;
       }
 
-      // Adaptive timestep: dt proportional to r / v, clamped to safe bounds
+      // Timestep calculation: fixed step or adaptive step with tolerance scaling
       const vMag = vel.magnitude();
       const dtMin = 0.05; // 50 ms minimum step
-      const dtMax = Math.max(1.0, (0.01 * rStart) / vInfSpeedMPerS);
-      const dt = Math.max(dtMin, Math.min(dtMax, (eta * r) / Math.max(vMag, 1.0)));
+      const dtMax = Math.max(1.0, (0.01 * rStart) / effectiveVInf);
+      const dt = fixedDt && fixedDt > 0
+        ? fixedDt
+        : Math.max(dtMin, Math.min(dtMax, (eta * r) / Math.max(vMag, 1.0)));
 
       // Save previous step state for sub-step refinement and continuous collision detection
       const prevPos = pos.clone();
@@ -760,14 +878,32 @@ export class FlybyEngine {
 
     // Error metrics
     const speedConservationErrorPercent =
-      Math.abs((numVInfPlusSpeed - vInfSpeedMPerS) / vInfSpeedMPerS) * 100.0;
+      vInfSpeedMPerS > 0
+        ? Math.abs((numVInfPlusSpeed - vInfSpeedMPerS) / vInfSpeedMPerS) * 100.0
+        : 0;
     const deflectionErrorPercent =
-      Math.abs((numDeltaDeg - analytical.deflectionAngleDeg) / analytical.deflectionAngleDeg) * 100.0;
+      analytical.deflectionAngleDeg > 0
+        ? Math.abs((numDeltaDeg - analytical.deflectionAngleDeg) / analytical.deflectionAngleDeg) * 100.0
+        : numDeltaDeg;
 
     let status: SimulationStatus = 'COMPLETED';
     if (collisionDetected) {
       status = 'COLLIDED';
     }
+
+    const diagnostics = FlybyDiagnostics.analyzeTrajectory(
+      trajectory,
+      muP,
+      analytical.deflectionAngleDeg,
+      vInfSpeedMPerS
+    );
+
+    const firstPt = trajectory[0];
+    const lastPt = trajectory[trajectory.length - 1];
+    const numDeltaVSpeedSun = lastPt.speedSunMPerS - firstPt.speedSunMPerS;
+    const numDeltaVVectorSun = Vector3D.sub(lastPt.velSunMPerS, firstPt.velSunMPerS);
+    const numDeltaEpsSun =
+      0.5 * (lastPt.speedSunMPerS * lastPt.speedSunMPerS - firstPt.speedSunMPerS * firstPt.speedSunMPerS);
 
     return {
       config,
@@ -783,6 +919,13 @@ export class FlybyEngine {
       collisionTimeS,
       collisionPositionPlanetM: collisionPosition,
       totalDurationS: timeS,
+      flybyDurationS: timeS,
+      peakGravitationalAccelerationMPerS2: diagnostics.peakGravitationalAccelerationMPerS2,
+      peakGravitationalAccelerationG0: diagnostics.peakGravitationalAccelerationG0,
+      sunRelativeDeltaVSpeedMPerS: numDeltaVSpeedSun,
+      sunRelativeDeltaVVectorMPerS: numDeltaVVectorSun,
+      sunRelativeDeltaSpecificEnergyJPerKg: numDeltaEpsSun,
+      convergenceDiagnostics: diagnostics,
     };
   }
 
@@ -900,4 +1043,149 @@ export class FlybyEngine {
       },
     };
   }
+
+  /**
+   * Computes gravitational acceleration vector in planet-centric frame:
+   * a_rel = -mu * r / |r|^3
+   */
+  static computeGravitationalAcceleration(r: IVector3D, mu: number): Vector3D {
+    return computeGravitationalAcceleration(r, mu);
+  }
+
+  /**
+   * Converts flyby altitude to periapsis radius:
+   * rp = planetRadius + flybyAltitude
+   */
+  static periapsisFromAltitude(planetRadiusM: number, flybyAltitudeM: number): number {
+    return computePeriapsisFromAltitude(planetRadiusM, flybyAltitudeM);
+  }
+
+  /**
+   * Converts periapsis radius to flyby altitude:
+   * flybyAltitude = rp - planetRadius
+   */
+  static altitudeFromPeriapsis(planetRadiusM: number, rpM: number): number {
+    return computeAltitudeFromPeriapsis(planetRadiusM, rpM);
+  }
+
+  /**
+   * Transforms velocity from Sun-relative frame to planet-relative frame:
+   * v_rel = v_spacecraft - v_planet
+   */
+  static toPlanetRelativeVelocity(vSpacecraft: IVector3D, vPlanet: IVector3D): Vector3D {
+    return toPlanetRelativeVelocity(vSpacecraft, vPlanet);
+  }
+
+  /**
+   * Transforms velocity from planet-relative frame to Sun-relative frame:
+   * v_sun = v_rel + v_planet
+   */
+  static toSunRelativeVelocity(vRel: IVector3D, vPlanet: IVector3D): Vector3D {
+    return toSunRelativeVelocity(vRel, vPlanet);
+  }
+}
+
+// ============================================================================
+// Pure Calculation Functions & Functional API
+// ============================================================================
+
+/**
+ * Computes gravitational acceleration vector in planet-centric frame:
+ * a_rel = -mu * r / |r|^3
+ *
+ * @param r - Spacecraft position relative to planet center (m)
+ * @param mu - Planetary gravitational parameter G * M (m^3/s^2)
+ */
+export function computeGravitationalAcceleration(r: IVector3D, mu: number): Vector3D {
+  const r2 = r.x * r.x + r.y * r.y + r.z * r.z;
+  const rMag = Math.sqrt(r2);
+  if (rMag <= 0 || mu <= 0) return new Vector3D(0, 0, 0);
+  const factor = -mu / (r2 * rMag);
+  const ax = r.x === 0 ? 0 : r.x * factor;
+  const ay = r.y === 0 ? 0 : r.y * factor;
+  const az = r.z === 0 ? 0 : r.z * factor;
+  return new Vector3D(ax, ay, az);
+}
+
+/**
+ * Computes hyperbolic eccentricity from periapsis radius and hyperbolic excess speed:
+ * e = 1 + rp * vinfinity^2 / mu
+ */
+export function computeHyperbolicEccentricity(rpM: number, vInfinityMPerS: number, muPlanet: number): number {
+  return FlybyEngine.eccentricityFromPeriapsis(rpM, vInfinityMPerS, muPlanet);
+}
+
+/**
+ * Computes hyperbolic deflection angle from eccentricity:
+ * delta = 2 * asin(1 / e)
+ */
+export function computeDeflectionAngle(eccentricity: number): number {
+  return FlybyEngine.deflectionFromEccentricity(eccentricity);
+}
+
+/**
+ * Computes impact parameter b from eccentricity:
+ * b = (mu / vinfinity^2) * sqrt(e^2 - 1)
+ */
+export function computeImpactParameter(eccentricity: number, vInfinityMPerS: number, muPlanet: number): number {
+  return FlybyEngine.impactParameterFromEccentricity(eccentricity, vInfinityMPerS, muPlanet);
+}
+
+/**
+ * Converts impact parameter b to closest-approach periapsis radius rp:
+ * rp = -(mu / vinfinity^2) + sqrt((mu / vinfinity^2)^2 + b^2)
+ */
+export function computePeriapsisFromImpactParameter(bM: number, vInfinityMPerS: number, muPlanet: number): number {
+  return FlybyEngine.impactParameterToPeriapsis(bM, vInfinityMPerS, muPlanet);
+}
+
+/**
+ * Converts flyby altitude to closest-approach periapsis radius:
+ * rp = planetRadius + flybyAltitude
+ */
+export function computePeriapsisFromAltitude(planetRadiusM: number, flybyAltitudeM: number): number {
+  return planetRadiusM + flybyAltitudeM;
+}
+
+/**
+ * Converts closest-approach periapsis radius to flyby altitude:
+ * flybyAltitude = rp - planetRadius
+ */
+export function computeAltitudeFromPeriapsis(planetRadiusM: number, rpM: number): number {
+  return rpM - planetRadiusM;
+}
+
+/**
+ * Transforms spacecraft velocity from Sun-centric frame to planet-relative frame:
+ * v_rel = v_spacecraft - v_planet
+ */
+export function toPlanetRelativeVelocity(vSpacecraft: IVector3D, vPlanet: IVector3D): Vector3D {
+  return CoordinateFrames.toPlanetRelative(vSpacecraft, vPlanet);
+}
+
+/**
+ * Transforms spacecraft velocity from planet-relative frame to Sun-centric frame:
+ * v_sun = v_rel + v_planet
+ */
+export function toSunRelativeVelocity(vRel: IVector3D, vPlanet: IVector3D): Vector3D {
+  return CoordinateFrames.toSunRelative(vRel, vPlanet);
+}
+
+/**
+ * Pure calculation function for analytical patched-conic hyperbolic flyby mechanics
+ */
+export function computeFlybyAnalytical(
+  config: FlybyInitialConditions
+): FlybyAnalyticalSummary {
+  return FlybyEngine.computeAnalytical(config);
+}
+
+/**
+ * Pure calculation function for time-dependent numerical flyby trajectory simulation
+ */
+export function simulateFlybyTrajectory(
+  config: FlybyInitialConditions,
+  options?: NumericalIntegrationOptions
+): FlybySimulationResult {
+  return FlybyEngine.runSimulation(config, options);
 }

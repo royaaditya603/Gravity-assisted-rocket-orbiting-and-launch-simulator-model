@@ -32,12 +32,12 @@ export class PlanetaryVisuals {
    * Creates a dedicated planetary visual bundle based on planet configuration
    */
   public static create(
-    planet: PlanetaryBodyData,
+    planet: PlanetaryBodyData | { id?: string; name: string; radiusM: number; massKg?: number; mu?: number; color?: number },
     visualRadius: number = 4.0,
     sunLightDirection: THREE.Vector3 = new THREE.Vector3(1.2, 0.5, 0.8).normalize()
   ): PlanetBundle {
     const group = new THREE.Group();
-    const planetId = planet.id.toUpperCase();
+    const planetId = (('id' in planet && planet.id) ? planet.id : planet.name || 'CUSTOM').toUpperCase();
 
     // Astronomical axial tilts (radians)
     const AXIAL_TILTS: Record<string, number> = {

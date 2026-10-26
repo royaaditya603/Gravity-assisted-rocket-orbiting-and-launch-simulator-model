@@ -8,7 +8,9 @@
  */
 
 // Fundamental Physical Constants (CODATA 2018)
-export const G_NEWTON = 6.6743e-11; // m^3 / (kg * s^2) (Universal Gravitational Constant)
+export const G = 6.6743e-11; // m^3 / (kg * s^2)
+export const G_NEWTON = G; // (Universal Gravitational Constant)
+export const SECONDS_PER_DAY = 86400.0;
 
 // Earth Gravitational Parameters
 export const MU_EARTH = 3.986004418e14; // m^3 / s^2 (Standard gravitational parameter GM)
@@ -47,6 +49,13 @@ export interface PlanetaryBodyData {
   ringOuterRadiusM?: number;
   isTheoretical?: boolean;
   customVelocityMPerS?: { x: number; y: number; z: number };
+  sourceOrReference?: string;
+  source?: string;
+  modelSimplificationNote?: string;
+  modelNotes?: string;
+  isSimplifiedModel?: boolean;
+  orbitalRadiusM?: number;
+  orbitalSpeedMs?: number;
 }
 
 export const PLANETARY_BODIES: Record<string, PlanetaryBodyData> = {
@@ -60,6 +69,8 @@ export const PLANETARY_BODIES: Record<string, PlanetaryBodyData> = {
     massKg: 1.89813e27,
     color: '#d4a373',
     description: 'Gas giant with immense gravitational well. Primary planetary accelerator for outer solar system missions.',
+    sourceOrReference: 'NASA Planetary Fact Sheet / JPL DE440 (2020)',
+    modelSimplificationNote: 'Simplified model input: spherical point-mass gravity, circular coplanar unperturbed orbit.',
   },
   SATURN: {
     id: 'SATURN',
@@ -73,6 +84,8 @@ export const PLANETARY_BODIES: Record<string, PlanetaryBodyData> = {
     description: 'Second largest gas giant with prominent rings. Used by Voyager and Cassini for trajectory shaping.',
     ringInnerRadiusM: 74500000.0, // 74,500 km
     ringOuterRadiusM: 136775000.0, // 136,775 km
+    sourceOrReference: 'NASA Planetary Fact Sheet / JPL DE440 (2020)',
+    modelSimplificationNote: 'Simplified model input: spherical point-mass gravity, circular coplanar unperturbed orbit.',
   },
   EARTH: {
     id: 'EARTH',
@@ -84,6 +97,21 @@ export const PLANETARY_BODIES: Record<string, PlanetaryBodyData> = {
     massKg: 5.9722e24,
     color: '#4f9fff',
     description: 'Home world and initial launch platform. Often used for resonant flyby assists (e.g. Cassini, Galileo).',
+    sourceOrReference: 'IERS Numerical Standards 2010 / WGS-84',
+    modelSimplificationNote: 'Simplified model input: spherical point-mass gravity, circular coplanar unperturbed orbit.',
+  },
+  MARS: {
+    id: 'MARS',
+    name: 'Mars',
+    mu: 4.2828375e13, // m^3 / s^2 (GM_M)
+    radiusM: 3389500.0, // 3,389.5 km mean volumetric radius
+    semiMajorAxisM: 227920000000.0, // 1.524 AU
+    orbitalSpeedMPerS: Math.sqrt(1.32712440018e20 / 227920000000.0), // ~24,130 m/s (~24.13 km/s)
+    massKg: 6.4171e23,
+    color: '#e27b58',
+    description: 'Fourth planet from the Sun. Critical waypoint for outer-system staging and inner-system gravity braking.',
+    sourceOrReference: 'NASA Planetary Fact Sheet / JPL DE440 (2020)',
+    modelSimplificationNote: 'Simplified model input: spherical point-mass gravity, circular coplanar unperturbed orbit.',
   },
   VENUS: {
     id: 'VENUS',
@@ -95,6 +123,8 @@ export const PLANETARY_BODIES: Record<string, PlanetaryBodyData> = {
     massKg: 4.8675e24,
     color: '#e6a15c',
     description: 'Dense terrestrial planet used for inner-solar system gravity braking and outbound slingshots.',
+    sourceOrReference: 'NASA Planetary Fact Sheet / JPL DE440 (2020)',
+    modelSimplificationNote: 'Simplified model input: spherical point-mass gravity, circular coplanar unperturbed orbit.',
   },
   MERCURY: {
     id: 'MERCURY',
@@ -106,6 +136,8 @@ export const PLANETARY_BODIES: Record<string, PlanetaryBodyData> = {
     massKg: 3.3011e23,
     color: '#9e9e9e',
     description: 'Innermost terrestrial planet. High orbital velocity requires massive gravity-braking assist to reach.',
+    sourceOrReference: 'NASA Planetary Fact Sheet / JPL DE440 (2020)',
+    modelSimplificationNote: 'Simplified model input: spherical point-mass gravity, circular coplanar unperturbed orbit.',
   },
   URANUS: {
     id: 'URANUS',
@@ -119,6 +151,8 @@ export const PLANETARY_BODIES: Record<string, PlanetaryBodyData> = {
     description: 'Ice giant visited by Voyager 2 in January 1986. Gravity assist accelerated probe toward Neptune.',
     ringInnerRadiusM: 38000000.0,
     ringOuterRadiusM: 51149000.0,
+    sourceOrReference: 'NASA Planetary Fact Sheet / JPL DE440 (2020)',
+    modelSimplificationNote: 'Simplified model input: spherical point-mass gravity, circular coplanar unperturbed orbit.',
   },
   NEPTUNE: {
     id: 'NEPTUNE',
@@ -130,8 +164,33 @@ export const PLANETARY_BODIES: Record<string, PlanetaryBodyData> = {
     massKg: 1.02413e26,
     color: '#3a86ff',
     description: 'Outermost ice giant. Voyager 2 flew over its north pole in August 1989 for a southward escape.',
+    sourceOrReference: 'NASA Planetary Fact Sheet / JPL DE440 (2020)',
+    modelSimplificationNote: 'Simplified model input: spherical point-mass gravity, circular coplanar unperturbed orbit.',
+  },
+  CUSTOM: {
+    id: 'CUSTOM',
+    name: 'Custom Planet',
+    mu: 1.0e16, // m^3 / s^2
+    radiusM: 20000000.0, // 20,000 km
+    semiMajorAxisM: 3.0 * AU,
+    orbitalSpeedMPerS: Math.sqrt(1.32712440018e20 / (3.0 * AU)),
+    massKg: 1.0e16 / G_NEWTON,
+    color: '#a855f7',
+    description: 'User-defined theoretical planet with configurable physical constants and orbital dynamics.',
+    isTheoretical: true,
+    sourceOrReference: 'Theoretical Exoplanet / User Model Configuration',
+    modelSimplificationNote: 'Simplified model input: spherical point-mass gravity, circular coplanar unperturbed orbit.',
   },
 };
+
+// Add lowercase aliases & compatibility properties
+for (const [key, body] of Object.entries(PLANETARY_BODIES)) {
+  const b = body as PlanetaryBodyData & { orbitalRadiusM?: number; orbitalSpeedMs?: number };
+  if (b.orbitalRadiusM === undefined) b.orbitalRadiusM = b.semiMajorAxisM;
+  if (b.orbitalSpeedMs === undefined) b.orbitalSpeedMs = b.orbitalSpeedMPerS;
+  PLANETARY_BODIES[key.toLowerCase()] = b;
+}
+
 
 // Canonical Verification Benchmarks (calculated strictly against R_EARTH = 6,371,000.0 m)
 export const BENCHMARKS = {

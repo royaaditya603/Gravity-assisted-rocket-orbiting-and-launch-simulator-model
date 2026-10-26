@@ -55,6 +55,10 @@ export class Vector3D implements IVector3D {
     return this;
   }
 
+  subtract(v: IVector3D): Vector3D {
+    return new Vector3D(this.x - v.x, this.y - v.y, this.z - v.z);
+  }
+
   scale(s: number): this {
     this.x *= s;
     this.y *= s;

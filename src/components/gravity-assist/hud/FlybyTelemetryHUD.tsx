@@ -30,10 +30,28 @@ export const FlybyTelemetryHUD: React.FC<FlybyTelemetryHUDProps> = ({
 }) => {
   const [showArchivalComparison, setShowArchivalComparison] = useState<boolean>(false);
 
-  if (!simResult || simResult.trajectory.length === 0) {
+  if (!simResult) {
+    return (
+      <div className="w-full bg-[#0d0e14] border border-[#202434] p-4 rounded-xs flex items-center justify-center gap-2 text-xs font-mono text-neutral-400">
+        <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+        AWAITING SIMULATION TELEMETRY DATA...
+      </div>
+    );
+  }
+
+  if (simResult.status === 'RUNNING') {
+    return (
+      <div className="w-full bg-[#0d0e14] border border-[#202434] p-4 rounded-xs flex items-center justify-center gap-2 text-xs font-mono text-amber-400">
+        <div className="w-2 h-2 rounded-full bg-amber-400 animate-spin" />
+        INTEGRATING TRAJECTORY (RK4 NUMERICAL INTEGRATION IN PROGRESS)...
+      </div>
+    );
+  }
+
+  if (simResult.trajectory.length === 0) {
     return (
       <div className="w-full bg-[#12141c] border border-[#232736] p-4 rounded-xs text-xs font-mono text-neutral-400">
-        NO TELEMETRY DATA AVAILABLE
+        NO TELEMETRY DATA AVAILABLE (EMPTY TRAJECTORY)
       </div>
     );
   }
@@ -51,11 +69,42 @@ export const FlybyTelemetryHUD: React.FC<FlybyTelemetryHUDProps> = ({
   const currentGForce = currentGravAccel / 9.80665; // Relative to Earth 1g
 
   // Historical reference lookup
-  const historicalRef = getHistoricalReferenceForPlanet(planet.id);
+  const historicalRef = planet.id ? getHistoricalReferenceForPlanet(planet.id) : undefined;
 
   // Provisional vs Confirmed Closest Approach state
   const hasPassedPeriapsis = currentPt.timeS >= closestApproach.timeS;
   const periCountdownS = closestApproach.timeS - currentPt.timeS;
+
+  // Spacecraft coordinates in current active frame (in km)
+  const isSunFrame = referenceFrame === 'HELIOCENTRIC';
+  const coordsKm = isSunFrame
+    ? {
+        x: (currentPt.posSunM.x / 1000.0).toFixed(0),
+        y: (currentPt.posSunM.y / 1000.0).toFixed(0),
+        z: (currentPt.posSunM.z / 1000.0).toFixed(0),
+      }
+    : {
+        x: (currentPt.posPlanetM.x / 1000.0).toFixed(0),
+        y: (currentPt.posPlanetM.y / 1000.0).toFixed(0),
+        z: (currentPt.posPlanetM.z / 1000.0).toFixed(0),
+      };
+
+  // Trajectory Flight Status
+  let trajectoryStatusText = 'INCOMING ASYMPTOTE';
+  let trajectoryStatusColor = 'text-sky-400';
+  if (collisionDetected && simResult.collisionTimeS !== undefined && currentPt.timeS >= simResult.collisionTimeS) {
+    trajectoryStatusText = 'SURFACE COLLISION IMPACT';
+    trajectoryStatusColor = 'text-rose-400';
+  } else if (Math.abs(currentPt.timeS - closestApproach.timeS) < 2.0) {
+    trajectoryStatusText = 'PERIAPSIS PASS (CLOSEST APPROACH)';
+    trajectoryStatusColor = 'text-amber-400';
+  } else if (currentPt.timeS > closestApproach.timeS) {
+    trajectoryStatusText = 'OUTGOING ASYMPTOTE (DEFLECTED)';
+    trajectoryStatusColor = 'text-emerald-400';
+  } else {
+    trajectoryStatusText = 'INCOMING HYPERBOLIC APPROACH';
+    trajectoryStatusColor = 'text-sky-400';
+  }
 
   return (
     <div className="w-full bg-[#0d0e14] border border-[#202434] p-4 rounded-xs flex flex-col gap-4 text-white">
@@ -147,142 +196,154 @@ export const FlybyTelemetryHUD: React.FC<FlybyTelemetryHUDProps> = ({
       )}
 
       {/* 2. Primary Telemetry Readouts Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {/* Planet-Centric Speed */}
-        <div className="bg-[#141620] border border-[#252a3d] p-3 rounded-xs flex flex-col gap-1">
-          <span className="text-[10px] font-mono text-neutral-400 uppercase">
-            PLANET SPEED
-          </span>
-          <span className="text-base font-mono font-bold text-amber-400">
-            {(currentPlanetSpeed / 1000.0).toFixed(2)} km/s
-          </span>
-          <span className="text-[9px] font-mono text-neutral-500">
-            v_∞: {(analytical.vInfMPerS / 1000.0).toFixed(2)} km/s
-          </span>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between text-[10px] font-mono tracking-wider text-neutral-400 uppercase border-b border-[#1b1e2c] pb-1">
+          <span className="text-sky-400 font-bold">1. INSTANTANEOUS STATE TELEMETRY</span>
+          <span className="text-neutral-500">FRAME: {referenceFrame} • COORDS: [X: {coordsKm.x}, Y: {coordsKm.y}, Z: {coordsKm.z}] km</span>
         </div>
 
-        {/* Sun-Centric Speed */}
-        <div className="bg-[#141620] border border-[#252a3d] p-3 rounded-xs flex flex-col gap-1">
-          <span className="text-[10px] font-mono text-neutral-400 uppercase">
-            SUN SPEED
-          </span>
-          <span className="text-base font-mono font-bold text-sky-400">
-            {(currentSunSpeed / 1000.0).toFixed(2)} km/s
-          </span>
-          <span className="text-[9px] font-mono text-neutral-500">
-            V_planet: {(planet.orbitalSpeedMPerS / 1000.0).toFixed(2)} km/s
-          </span>
-        </div>
-
-        {/* Altitude Above Surface */}
-        <div className="bg-[#141620] border border-[#252a3d] p-3 rounded-xs flex flex-col gap-1">
-          <span className="text-[10px] font-mono text-neutral-400 uppercase">
-            ALTITUDE (h)
-          </span>
-          <span className={`text-base font-mono font-bold ${currentAltKm <= 0 ? 'text-rose-400' : 'text-white'}`}>
-            {currentAltKm.toLocaleString(undefined, { maximumFractionDigits: 0 })} km
-          </span>
-          <span className="text-[9px] font-mono text-neutral-500">
-            r: {currentDistKm.toLocaleString(undefined, { maximumFractionDigits: 0 })} km
-          </span>
-        </div>
-
-        {/* Current Gravitational Acceleration g(r) */}
-        <div className="bg-[#141620] border border-[#252a3d] p-3 rounded-xs flex flex-col gap-1">
-          <span className="text-[10px] font-mono text-neutral-400 uppercase">
-            GRAVITY g(r)
-          </span>
-          <span className="text-base font-mono font-bold text-purple-400">
-            {currentGravAccel < 100 ? currentGravAccel.toFixed(2) : currentGravAccel.toFixed(0)} m/s²
-          </span>
-          <span className="text-[9px] font-mono text-neutral-500">
-            {currentGForce.toFixed(2)} g_earth
-          </span>
-        </div>
-
-        {/* Net Sun-Relative Boost */}
-        <div className="bg-[#141620] border border-[#252a3d] p-3 rounded-xs flex flex-col gap-1">
-          <span className="text-[10px] font-mono text-neutral-400 uppercase">
-            SUN-FRAME ΔV (SPEED)
-          </span>
-          <span
-            className={`text-base font-mono font-bold ${
-              analytical.isAcceleration ? 'text-emerald-400' : 'text-rose-400'
-            }`}
-          >
-            {analytical.isAcceleration ? '+' : ''}
-            {(analytical.deltaVSunSpeedMPerS / 1000.0).toFixed(2)} km/s
-          </span>
-          <span className="text-[9px] font-mono text-neutral-500">
-            {analytical.isAcceleration ? 'ACCEL' : 'BRAKE'} • |Δv_vec|: {(analytical.deltaVVectorMagnitudeMPerS / 1000.0).toFixed(2)} km/s
-          </span>
-        </div>
-
-        {/* Kinetic Energy Change */}
-        <div className="bg-[#141620] border border-[#252a3d] p-3 rounded-xs flex flex-col gap-1">
-          <span className="text-[10px] font-mono text-neutral-400 uppercase">
-            ENERGY CHANGE (ΔK)
-          </span>
-          <span
-            className={`text-base font-mono font-bold ${
-              analytical.isAcceleration ? 'text-emerald-400' : 'text-rose-400'
-            }`}
-          >
-            {(analytical.deltaTotalKineticEnergyJ / 1e9).toFixed(2)} GJ
-          </span>
-          <span className="text-[9px] font-mono text-neutral-500">
-            {(analytical.deltaKineticEnergyJPerKg / 1e6).toFixed(2)} MJ/kg
-          </span>
-        </div>
-      </div>
-
-      {/* 3. Deep Analytical & Event Confirmation Box */}
-      <div className="bg-[#11131c] border border-[#23283a] p-3 rounded-xs flex flex-wrap items-center justify-between gap-4 text-xs font-mono">
-        <div className="flex flex-wrap items-center gap-6 text-neutral-400">
-          {/* Closest Approach with Provisional vs Confirmed Badge */}
-          <div>
-            <span>CLOSEST APPROACH: </span>
-            <strong className="text-white">
-              {(closestApproach.distanceM / 1000.0).toLocaleString(undefined, { maximumFractionDigits: 0 })} km
-            </strong>{' '}
-            <span className={hasPassedPeriapsis ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
-              {hasPassedPeriapsis
-                ? `[CONFIRMED AT T + ${closestApproach.timeS.toFixed(1)}s]`
-                : `[PROVISIONAL — IN ${periCountdownS.toFixed(1)}s]`}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {/* Planet-Centric Speed */}
+          <div className="bg-[#141620] border border-[#252a3d] p-3 rounded-xs flex flex-col gap-1">
+            <span className="text-[10px] font-mono text-neutral-400 uppercase">
+              PLANET SPEED (v_rel)
+            </span>
+            <span className="text-base font-mono font-bold text-amber-400">
+              {(currentPlanetSpeed / 1000.0).toFixed(2)} km/s
+            </span>
+            <span className="text-[9px] font-mono text-neutral-500 truncate" title={`v_x: ${(currentPt.velPlanetMPerS.x / 1000).toFixed(2)}, v_y: ${(currentPt.velPlanetMPerS.y / 1000).toFixed(2)} km/s`}>
+              [{ (currentPt.velPlanetMPerS.x / 1000).toFixed(1) }, { (currentPt.velPlanetMPerS.y / 1000).toFixed(1) }] km/s
             </span>
           </div>
 
-          <div>
-            <span>IMPACT PARAMETER (b): </span>
-            <strong className="text-white">
-              {(analytical.impactParameterM / 1000.0).toLocaleString(undefined, { maximumFractionDigits: 0 })} km
-            </strong>
+          {/* Sun-Centric Speed */}
+          <div className="bg-[#141620] border border-[#252a3d] p-3 rounded-xs flex flex-col gap-1">
+            <span className="text-[10px] font-mono text-neutral-400 uppercase">
+              SUN SPEED (v_⊙)
+            </span>
+            <span className="text-base font-mono font-bold text-sky-400">
+              {(currentSunSpeed / 1000.0).toFixed(2)} km/s
+            </span>
+            <span className="text-[9px] font-mono text-neutral-500 truncate" title={`v_x: ${(currentPt.velSunMPerS.x / 1000).toFixed(2)}, v_y: ${(currentPt.velSunMPerS.y / 1000).toFixed(2)} km/s`}>
+              [{ (currentPt.velSunMPerS.x / 1000).toFixed(1) }, { (currentPt.velSunMPerS.y / 1000).toFixed(1) }] km/s
+            </span>
           </div>
 
-          <div>
-            <span>DEFLECTION (δ): </span>
-            <strong className="text-amber-400">
-              {analytical.deflectionAngleDeg.toFixed(2)}°
-            </strong>
+          {/* Altitude Above Surface */}
+          <div className="bg-[#141620] border border-[#252a3d] p-3 rounded-xs flex flex-col gap-1">
+            <span className="text-[10px] font-mono text-neutral-400 uppercase">
+              ALTITUDE (h)
+            </span>
+            <span className={`text-base font-mono font-bold ${currentAltKm <= 0 ? 'text-rose-400' : 'text-white'}`}>
+              {currentAltKm <= 0 ? '0 km (IMPACT)' : `${currentAltKm.toLocaleString(undefined, { maximumFractionDigits: 0 })} km`}
+            </span>
+            <span className="text-[9px] font-mono text-neutral-500">
+              r_center: {currentDistKm.toLocaleString(undefined, { maximumFractionDigits: 0 })} km
+            </span>
           </div>
 
-          <div>
-            <span>REST-FRAME SPEED ERROR: </span>
-            <strong className="text-emerald-400">
-              {simResult.speedConservationErrorPercent.toFixed(4)}%
-            </strong>
+          {/* Current Gravitational Acceleration g(r) */}
+          <div className="bg-[#141620] border border-[#252a3d] p-3 rounded-xs flex flex-col gap-1">
+            <span className="text-[10px] font-mono text-neutral-400 uppercase">
+              GRAVITY g(r)
+            </span>
+            <span className="text-base font-mono font-bold text-purple-400">
+              {currentGravAccel < 100 ? currentGravAccel.toFixed(2) : currentGravAccel.toFixed(0)} m/s²
+            </span>
+            <span className="text-[9px] font-mono text-neutral-500">
+              {currentGForce.toFixed(2)} g_earth
+            </span>
           </div>
 
-          <div>
-            <span>ENERGY IDENTITY: </span>
-            <strong className="text-emerald-400">
-              Δε ≡ V_p · Δv
-            </strong>
+          {/* Spacecraft Coordinates */}
+          <div className="bg-[#141620] border border-[#252a3d] p-3 rounded-xs flex flex-col gap-1">
+            <span className="text-[10px] font-mono text-neutral-400 uppercase">
+              COORDINATES (X, Y)
+            </span>
+            <span className="text-xs font-mono font-bold text-neutral-200 truncate">
+              {coordsKm.x}, {coordsKm.y}
+            </span>
+            <span className="text-[9px] font-mono text-neutral-500">
+              Z: {coordsKm.z} km
+            </span>
+          </div>
+
+          {/* Current Trajectory Status */}
+          <div className="bg-[#141620] border border-[#252a3d] p-3 rounded-xs flex flex-col gap-1">
+            <span className="text-[10px] font-mono text-neutral-400 uppercase">
+              TRAJECTORY STATUS
+            </span>
+            <span className={`text-xs font-mono font-bold ${trajectoryStatusColor} truncate`}>
+              {trajectoryStatusText}
+            </span>
+            <span className="text-[9px] font-mono text-neutral-500">
+              {hasPassedPeriapsis ? 'POST-PERIAPSIS' : 'PRE-PERIAPSIS'}
+            </span>
           </div>
         </div>
+      </div>
 
-        <div className="text-[10px] text-neutral-500">
-          PROBE MASS: {simResult.config.spacecraftMassKg.toLocaleString()} kg • SI METRIC
+      {/* 3. Deep Analytical & Event Confirmation Box (Final Mission Results) */}
+      <div className="flex flex-col gap-2 border-t border-[#1b1e2c] pt-2">
+        <div className="text-[10px] font-mono tracking-wider text-neutral-400 uppercase">
+          <span className="text-amber-400 font-bold">2. FINAL FLYBY & ASYMPTOTIC ENCOUNTER RESULTS</span>
+        </div>
+
+        <div className="bg-[#11131c] border border-[#23283a] p-3 rounded-xs flex flex-wrap items-center justify-between gap-4 text-xs font-mono">
+          <div className="flex flex-wrap items-center gap-6 text-neutral-400">
+            {/* Closest Approach with Provisional vs Confirmed Badge */}
+            <div>
+              <span>CLOSEST APPROACH: </span>
+              <strong className="text-white">
+                {(closestApproach.distanceM / 1000.0).toLocaleString(undefined, { maximumFractionDigits: 0 })} km
+              </strong>{' '}
+              <span className={hasPassedPeriapsis ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
+                {hasPassedPeriapsis
+                  ? `[CONFIRMED AT T + ${closestApproach.timeS.toFixed(1)}s]`
+                  : `[PROVISIONAL — IN ${Math.max(0, periCountdownS).toFixed(1)}s]`}
+              </span>
+            </div>
+
+            <div>
+              <span>IMPACT PARAMETER (b): </span>
+              <strong className="text-white">
+                {(analytical.impactParameterM / 1000.0).toLocaleString(undefined, { maximumFractionDigits: 0 })} km
+              </strong>
+            </div>
+
+            <div>
+              <span>DEFLECTION (δ): </span>
+              <strong className="text-amber-400">
+                {analytical.deflectionAngleDeg.toFixed(2)}°
+              </strong>
+            </div>
+
+            <div>
+              <span>NET SUN ΔV BOOST: </span>
+              <strong className={analytical.isAcceleration ? 'text-emerald-400' : 'text-rose-400'}>
+                {analytical.isAcceleration ? '+' : ''}
+                {(analytical.deltaVSunSpeedMPerS / 1000.0).toFixed(2)} km/s
+              </strong>
+            </div>
+
+            <div>
+              <span>KINETIC ENERGY (ΔK): </span>
+              <strong className={analytical.isAcceleration ? 'text-emerald-400' : 'text-rose-400'}>
+                {(analytical.deltaTotalKineticEnergyJ / 1e9).toFixed(2)} GJ
+              </strong>
+            </div>
+
+            <div>
+              <span>SPEED CONSERVATION ERROR: </span>
+              <strong className="text-emerald-400">
+                {simResult.speedConservationErrorPercent.toFixed(4)}%
+              </strong>
+            </div>
+          </div>
+
+          <div className="text-[10px] text-neutral-500">
+            PROBE MASS: {simResult.config.spacecraftMassKg.toLocaleString()} kg • SI METRIC
+          </div>
         </div>
       </div>
     </div>

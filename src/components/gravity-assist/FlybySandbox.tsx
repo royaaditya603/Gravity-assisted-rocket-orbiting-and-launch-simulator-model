@@ -19,37 +19,72 @@ import {
   exportScenarioToJSON,
   importScenarioFromJSON,
   validateScenario,
+  detectScenarioChanges,
 } from '../../physics/FlybyScenario';
 import { Flyby3DCanvas, FlybyCameraMode } from './viewport/Flyby3DCanvas';
 import { FlybyControlDeck } from './controls/FlybyControlDeck';
+import { FlybySimulationToolbar, ViewFrameMode } from './controls/FlybySimulationToolbar';
+import { ParameterSensitivityDeck } from './controls/ParameterSensitivityDeck';
 import { FlybyTelemetryHUD } from './hud/FlybyTelemetryHUD';
 import { FlybyCharts } from './charts/FlybyCharts';
 import { FlybyExperiments } from './experiments/FlybyExperiments';
 import { FlybyMissions } from './missions/FlybyMissions';
-import { Sparkles, Compass, ShieldAlert, Cpu } from 'lucide-react';
+import { Sparkles, Compass, ShieldAlert, Cpu, Sliders, ChevronDown, ChevronUp, TrendingUp, Orbit, LineChart } from 'lucide-react';
+import { GraphicsQuality } from './viewport/Flyby3DCanvas';
 
-export const FlybySandbox: React.FC = () => {
+export interface FlybySandboxProps {
+  initialView?: 'SIMULATION' | 'ANALYSIS';
+  graphicsQuality?: GraphicsQuality;
+  reducedMotion?: boolean;
+}
+
+export const FlybySandbox: React.FC<FlybySandboxProps> = ({
+  initialView = 'SIMULATION',
+  graphicsQuality = 'HIGH',
+  reducedMotion = false,
+}) => {
+  const [activeTab, setActiveTab] = useState<'SIMULATION' | 'ANALYSIS'>(initialView);
+
+  useEffect(() => {
+    if (initialView) {
+      setActiveTab(initialView);
+    }
+  }, [initialView]);
+
   // Authoritative Scenario State
   const [scenario, setScenario] = useState<FlybyScenarioConfig>(DEFAULT_FLYBY_SCENARIO);
   const [draftScenario, setDraftScenario] = useState<FlybyScenarioConfig>(DEFAULT_FLYBY_SCENARIO);
+  const [lastRunScenario, setLastRunScenario] = useState<FlybyScenarioConfig>(DEFAULT_FLYBY_SCENARIO);
+  const [undoStack, setUndoStack] = useState<FlybyScenarioConfig[]>([]);
+  const [redoStack, setRedoStack] = useState<FlybyScenarioConfig[]>([]);
   const lastValidScenarioRef = useRef<FlybyScenarioConfig>(DEFAULT_FLYBY_SCENARIO);
   const [autoApply, setAutoApply] = useState<boolean>(true);
   const [savedScenarios, setSavedScenarios] = useState<FlybyScenarioConfig[]>(() => loadSavedScenarios());
 
   // View & Playback State
-  const [referenceFrame, setReferenceFrame] = useState<ReferenceFrame>('PLANET_CENTRIC');
+  const [viewFrameMode, setViewFrameMode] = useState<ViewFrameMode>('PLANET_CENTRIC');
   const [cameraMode, setCameraMode] = useState<FlybyCameraMode>('OVERVIEW');
   const [showVectors, setShowVectors] = useState<boolean>(true);
   const [showTrajectoryTrail, setShowTrajectoryTrail] = useState<boolean>(true);
+  const [isParamsCollapsed, setIsParamsCollapsed] = useState<boolean>(false);
+  const [showSensitivityDeck, setShowSensitivityDeck] = useState<boolean>(false);
 
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(2.0);
   const [currentPlaybackIndex, setCurrentPlaybackIndex] = useState<number>(0);
 
+  // Derive active reference frame for single viewport components
+  const activeReferenceFrame: ReferenceFrame = viewFrameMode === 'HELIOCENTRIC' ? 'HELIOCENTRIC' : 'PLANET_CENTRIC';
+
   // Check if draft has unsaved / unapplied modifications
   const isDraftStale = useMemo(() => {
     return JSON.stringify(scenario) !== JSON.stringify(draftScenario);
   }, [scenario, draftScenario]);
+
+  // Parameters changed since the last authoritative run
+  const changedParams = useMemo(() => {
+    return detectScenarioChanges(lastRunScenario, draftScenario);
+  }, [lastRunScenario, draftScenario]);
 
   // Deterministically compute authoritative simulation result from active scenario
   const simResult: FlybySimulationResult = useMemo(() => {
@@ -86,8 +121,8 @@ export const FlybySandbox: React.FC = () => {
   const handleStep = useCallback(() => {
     setIsPlaying(false);
     setCurrentPlaybackIndex((prev) => {
-      if (!simResult) return 0;
-      return Math.min(prev + 5, simResult.trajectory.length - 1);
+      if (!simResult || simResult.trajectory.length === 0) return 0;
+      return Math.min(prev + 1, simResult.trajectory.length - 1);
     });
   }, [simResult]);
 
@@ -100,6 +135,10 @@ export const FlybySandbox: React.FC = () => {
     (updater: (prev: FlybyScenarioConfig) => FlybyScenarioConfig) => {
       setDraftScenario((prev) => {
         const next = updater(prev);
+        if (JSON.stringify(prev) !== JSON.stringify(next)) {
+          setUndoStack((u) => [...u.slice(-30), prev]);
+          setRedoStack([]);
+        }
         const validation = validateScenario(next);
         if (validation.isValid) {
           lastValidScenarioRef.current = next;
@@ -109,7 +148,8 @@ export const FlybySandbox: React.FC = () => {
             }
             debounceTimerRef.current = window.setTimeout(() => {
               setScenario(next);
-            }, 60);
+              setLastRunScenario(next);
+            }, 100);
           }
         }
         return next;
@@ -122,12 +162,62 @@ export const FlybySandbox: React.FC = () => {
     const validation = validateScenario(draftScenario);
     if (validation.isValid) {
       setScenario(draftScenario);
+      setLastRunScenario(draftScenario);
       lastValidScenarioRef.current = draftScenario;
       setCurrentPlaybackIndex(0);
     } else {
       alert(`Invalid configuration: ${validation.errors.join('; ')}`);
     }
   }, [draftScenario]);
+
+  const handleUndo = useCallback(() => {
+    setUndoStack((currentUndo) => {
+      if (currentUndo.length === 0) return currentUndo;
+      const previous = currentUndo[currentUndo.length - 1];
+      const newUndo = currentUndo.slice(0, currentUndo.length - 1);
+      setRedoStack((r) => [...r, draftScenario]);
+      setDraftScenario(previous);
+      if (autoApply) {
+        setScenario(previous);
+        setLastRunScenario(previous);
+      }
+      return newUndo;
+    });
+  }, [draftScenario, autoApply]);
+
+  const handleRedo = useCallback(() => {
+    setRedoStack((currentRedo) => {
+      if (currentRedo.length === 0) return currentRedo;
+      const next = currentRedo[currentRedo.length - 1];
+      const newRedo = currentRedo.slice(0, currentRedo.length - 1);
+      setUndoStack((u) => [...u, draftScenario]);
+      setDraftScenario(next);
+      if (autoApply) {
+        setScenario(next);
+        setLastRunScenario(next);
+      }
+      return newRedo;
+    });
+  }, [draftScenario, autoApply]);
+
+  // Global Keyboard Shortcuts for Undo (Ctrl+Z) and Redo (Ctrl+Y / Ctrl+Shift+Z)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isModifier = e.ctrlKey || e.metaKey;
+      if (isModifier && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      } else if (
+        isModifier &&
+        (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))
+      ) {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo]);
 
   const handleResetToPreset = useCallback(() => {
     const presetKey = (draftScenario.planet.presetId as any) || 'JUPITER';
@@ -285,81 +375,36 @@ export const FlybySandbox: React.FC = () => {
           </p>
         </div>
 
-        {/* 1. Main 3D Viewport & HUD */}
-        <div className="flex flex-col gap-3">
-          <Flyby3DCanvas
-            simResult={simResult}
-            currentPlaybackIndex={currentPlaybackIndex}
-            referenceFrame={referenceFrame}
-            cameraMode={cameraMode}
-            showVectors={showVectors}
-            showTrajectoryTrail={showTrajectoryTrail}
-            isPlaying={isPlaying}
-            playbackSpeed={playbackSpeed}
-            onCameraChange={setCameraMode}
-            onReferenceFrameChange={setReferenceFrame}
-            onPlaybackIndexChange={handleSeek}
-          />
-
-          <FlybyTelemetryHUD
-            simResult={simResult}
-            currentPlaybackIndex={currentPlaybackIndex}
-            referenceFrame={referenceFrame}
-          />
+        {/* Workspace Mode Tabs */}
+        <div className="flex items-center gap-2 border-b border-[#1b253b] pb-2 text-xs font-mono">
+          <button
+            onClick={() => setActiveTab('SIMULATION')}
+            className={`px-4 py-2 rounded-xs border font-bold flex items-center gap-2 transition-colors cursor-pointer ${
+              activeTab === 'SIMULATION'
+                ? 'bg-[#18233c] text-sky-300 border-sky-500/50'
+                : 'bg-[#0d121f] text-neutral-400 border-[#1a233a] hover:text-white'
+            }`}
+          >
+            <Orbit size={14} className="text-sky-400" />
+            <span>3D TRAJECTORY VIEWPORT & CONTROLS</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('ANALYSIS')}
+            className={`px-4 py-2 rounded-xs border font-bold flex items-center gap-2 transition-colors cursor-pointer ${
+              activeTab === 'ANALYSIS'
+                ? 'bg-[#18233c] text-emerald-300 border-emerald-500/50'
+                : 'bg-[#0d121f] text-neutral-400 border-[#1a233a] hover:text-white'
+            }`}
+          >
+            <LineChart size={14} className="text-emerald-400" />
+            <span>ANALYSIS LAB & FLIGHT DYNAMICS</span>
+          </button>
         </div>
 
-        {/* 2. Interactive Control Deck & Scenario Management */}
-        <FlybyControlDeck
-          selectedPlanet={scenario.planet as any}
-          onSelectPlanet={(p) => {
-            handleUpdateDraft((prev) => ({
-              ...prev,
-              planet: {
-                ...prev.planet,
-                presetId: 'id' in p ? p.id : (p as any).presetId || 'CUSTOM',
-                name: p.name,
-                isTheoretical: false,
-                massKg: p.massKg,
-                radiusM: p.radiusM,
-                mu: p.mu,
-                semiMajorAxisM: p.semiMajorAxisM,
-                orbitalSpeedMPerS: p.orbitalSpeedMPerS,
-                color: p.color,
-              },
-            }));
-          }}
-          vInfSpeedMPerS={scenario.encounter.vInfSpeedMPerS}
-          onChangeVInf={(v) => {
-            handleUpdateDraft((prev) => ({
-              ...prev,
-              encounter: { ...prev.encounter, vInfSpeedMPerS: v },
-            }));
-          }}
-          periapsisAltitudeKm={scenario.encounter.periapsisAltitudeKm}
-          onChangePeriapsisAltitude={(alt) => {
-            handleUpdateDraft((prev) => ({
-              ...prev,
-              encounter: { ...prev.encounter, periapsisAltitudeKm: alt },
-            }));
-          }}
-          passType={scenario.encounter.passType}
-          onChangePassType={(pass) => {
-            handleUpdateDraft((prev) => ({
-              ...prev,
-              encounter: { ...prev.encounter, passType: pass },
-            }));
-          }}
-          spacecraftMassKg={scenario.encounter.spacecraftMassKg}
-          onChangeSpacecraftMass={(m) => {
-            handleUpdateDraft((prev) => ({
-              ...prev,
-              encounter: { ...prev.encounter, spacecraftMassKg: m },
-            }));
-          }}
-          referenceFrame={referenceFrame}
-          onChangeReferenceFrame={setReferenceFrame}
-          cameraMode={cameraMode}
-          onChangeCameraMode={setCameraMode}
+        {activeTab === 'SIMULATION' ? (
+          <>
+            {/* 1. Simulation Toolbar */}
+            <FlybySimulationToolbar
           isPlaying={isPlaying}
           onTogglePlay={handleTogglePlay}
           onReset={handleReset}
@@ -368,43 +413,270 @@ export const FlybySandbox: React.FC = () => {
           onChangePlaybackSpeed={setPlaybackSpeed}
           currentStepIndex={currentPlaybackIndex}
           totalSteps={simResult.trajectory.length}
+          currentTimeS={simResult.trajectory[currentPlaybackIndex]?.timeS ?? 0}
+          totalDurationS={simResult.totalDurationS}
           onSeek={handleSeek}
+          periapsisTimeS={simResult.closestApproach.timeS}
+          collisionTimeS={simResult.collisionTimeS}
+          collisionDetected={simResult.collisionDetected}
+          viewFrameMode={viewFrameMode}
+          onChangeViewFrameMode={setViewFrameMode}
+          cameraMode={cameraMode}
+          onChangeCameraMode={setCameraMode}
+          onResetCamera={() => setCameraMode('OVERVIEW')}
           showVectors={showVectors}
           onToggleVectors={() => setShowVectors((prev) => !prev)}
           showTrajectoryTrail={showTrajectoryTrail}
           onToggleTrajectoryTrail={() => setShowTrajectoryTrail((prev) => !prev)}
-          // Scenario Props
-          scenario={scenario}
-          draftScenario={draftScenario}
-          onUpdateDraft={handleUpdateDraft}
-          onApplySettings={handleApplySettings}
-          onResetToPreset={handleResetToPreset}
-          onResetToDefaults={handleResetToDefaults}
-          onSaveScenario={handleSaveScenario}
-          onLoadScenario={handleLoadScenario}
-          onDuplicateScenario={handleDuplicateScenario}
-          onDeleteScenario={handleDeleteScenario}
-          onExportJSON={handleExportJSON}
-          onImportJSON={handleImportJSON}
-          onRestoreLastValid={handleRestoreLastValid}
-          isDraftStale={isDraftStale}
-          autoApply={autoApply}
-          onToggleAutoApply={() => setAutoApply((prev) => !prev)}
-          savedScenarios={savedScenarios}
+          isParamsCollapsed={isParamsCollapsed}
+          onToggleParamsCollapse={() => setIsParamsCollapsed((prev) => !prev)}
         />
 
-        {/* 3. Real-Time Telemetry & Physics Charts */}
+        {/* 2. Trajectory Viewport (Single or Side-by-Side Split View) */}
+        <div className="w-full flex flex-col gap-3">
+          {viewFrameMode === 'SIDE_BY_SIDE' ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 w-full">
+              {/* Left Viewport: Planet-Relative Rest Frame */}
+              <Flyby3DCanvas
+                simResult={simResult}
+                currentPlaybackIndex={currentPlaybackIndex}
+                referenceFrame="PLANET_CENTRIC"
+                cameraMode={cameraMode}
+                showVectors={showVectors}
+                showTrajectoryTrail={showTrajectoryTrail}
+                isPlaying={isPlaying}
+                playbackSpeed={playbackSpeed}
+                onCameraChange={setCameraMode}
+                onPlaybackIndexChange={handleSeek}
+                title="PLANET-RELATIVE FRAME (||v_∞|| CONSERVED)"
+                heightClass="h-[520px]"
+              />
+
+              {/* Right Viewport: Sun-Relative Heliocentric Frame */}
+              <Flyby3DCanvas
+                simResult={simResult}
+                currentPlaybackIndex={currentPlaybackIndex}
+                referenceFrame="HELIOCENTRIC"
+                cameraMode={cameraMode}
+                showVectors={showVectors}
+                showTrajectoryTrail={showTrajectoryTrail}
+                isPlaying={isPlaying}
+                playbackSpeed={playbackSpeed}
+                onCameraChange={setCameraMode}
+                onPlaybackIndexChange={handleSeek}
+                title="SUN-RELATIVE HELIOCENTRIC FRAME (MOMENTUM TRANSFER)"
+                heightClass="h-[520px]"
+              />
+            </div>
+          ) : (
+            <Flyby3DCanvas
+              simResult={simResult}
+              currentPlaybackIndex={currentPlaybackIndex}
+              referenceFrame={activeReferenceFrame}
+              cameraMode={cameraMode}
+              showVectors={showVectors}
+              showTrajectoryTrail={showTrajectoryTrail}
+              isPlaying={isPlaying}
+              playbackSpeed={playbackSpeed}
+              onCameraChange={setCameraMode}
+              onReferenceFrameChange={(f) => setViewFrameMode(f)}
+              onPlaybackIndexChange={handleSeek}
+              title={viewFrameMode === 'PLANET_CENTRIC' ? 'PLANET-CENTRIC REST FRAME' : 'HELIOCENTRIC SUN FRAME'}
+              heightClass="h-[580px]"
+            />
+          )}
+
+          {/* 3. Live Telemetry Panel */}
+          <FlybyTelemetryHUD
+            simResult={simResult}
+            currentPlaybackIndex={currentPlaybackIndex}
+            referenceFrame={activeReferenceFrame}
+          />
+        </div>
+
+        {/* 4. Collapsible Parameter Panel */}
+        <div id="flyby-parameters" className="w-full">
+          {isParamsCollapsed ? (
+            <div className="w-full bg-[#0c0e16] border border-[#1f2538] p-3 rounded-xs flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-neutral-300">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="w-2 h-2 rounded-full bg-amber-400" />
+                <span>ACTIVE TARGET: <strong className="text-white">{scenario.planet.name.toUpperCase()}</strong></span>
+                <span>v_∞: <strong className="text-amber-400">{(scenario.encounter.vInfSpeedMPerS / 1000).toFixed(1)} km/s</strong></span>
+                <span>PERIAPSIS: <strong className="text-emerald-400">{scenario.encounter.periapsisAltitudeKm.toLocaleString()} km</strong></span>
+                <span>PASS: <strong className="text-sky-400">{scenario.encounter.passType}</strong></span>
+              </div>
+              <button
+                onClick={() => setIsParamsCollapsed(false)}
+                className="px-3 py-1 bg-[#1a2133] hover:bg-[#25304a] text-sky-300 rounded-xs border border-[#2d3a58] flex items-center gap-1 font-bold text-[11px] transition-colors"
+              >
+                <Sliders size={12} /> EXPAND PARAMETERS
+              </button>
+            </div>
+          ) : (
+            <FlybyControlDeck
+              selectedPlanet={scenario.planet as any}
+              onSelectPlanet={(p) => {
+                handleUpdateDraft((prev) => ({
+                  ...prev,
+                  planet: {
+                    ...prev.planet,
+                    presetId: 'id' in p ? p.id : (p as any).presetId || 'CUSTOM',
+                    name: p.name,
+                    isTheoretical: false,
+                    massKg: p.massKg,
+                    radiusM: p.radiusM,
+                    mu: p.mu,
+                    semiMajorAxisM: p.semiMajorAxisM,
+                    orbitalSpeedMPerS: p.orbitalSpeedMPerS,
+                    color: p.color,
+                  },
+                }));
+              }}
+              vInfSpeedMPerS={scenario.encounter.vInfSpeedMPerS}
+              onChangeVInf={(v) => {
+                handleUpdateDraft((prev) => ({
+                  ...prev,
+                  encounter: { ...prev.encounter, vInfSpeedMPerS: v },
+                }));
+              }}
+              periapsisAltitudeKm={scenario.encounter.periapsisAltitudeKm}
+              onChangePeriapsisAltitude={(alt) => {
+                handleUpdateDraft((prev) => ({
+                  ...prev,
+                  encounter: { ...prev.encounter, periapsisAltitudeKm: alt },
+                }));
+              }}
+              passType={scenario.encounter.passType}
+              onChangePassType={(pass) => {
+                handleUpdateDraft((prev) => ({
+                  ...prev,
+                  encounter: { ...prev.encounter, passType: pass },
+                }));
+              }}
+              spacecraftMassKg={scenario.encounter.spacecraftMassKg}
+              onChangeSpacecraftMass={(m) => {
+                handleUpdateDraft((prev) => ({
+                  ...prev,
+                  encounter: { ...prev.encounter, spacecraftMassKg: m },
+                }));
+              }}
+              referenceFrame={activeReferenceFrame}
+              onChangeReferenceFrame={(f) => setViewFrameMode(f)}
+              cameraMode={cameraMode}
+              onChangeCameraMode={setCameraMode}
+              isPlaying={isPlaying}
+              onTogglePlay={handleTogglePlay}
+              onReset={handleReset}
+              onStep={handleStep}
+              playbackSpeed={playbackSpeed}
+              onChangePlaybackSpeed={setPlaybackSpeed}
+              currentStepIndex={currentPlaybackIndex}
+              totalSteps={simResult.trajectory.length}
+              onSeek={handleSeek}
+              showVectors={showVectors}
+              onToggleVectors={() => setShowVectors((prev) => !prev)}
+              showTrajectoryTrail={showTrajectoryTrail}
+              onToggleTrajectoryTrail={() => setShowTrajectoryTrail((prev) => !prev)}
+              // Scenario Props
+              scenario={scenario}
+              draftScenario={draftScenario}
+              onUpdateDraft={handleUpdateDraft}
+              onApplySettings={handleApplySettings}
+              onResetToPreset={handleResetToPreset}
+              onResetToDefaults={handleResetToDefaults}
+              onSaveScenario={handleSaveScenario}
+              onLoadScenario={handleLoadScenario}
+              onDuplicateScenario={handleDuplicateScenario}
+              onDeleteScenario={handleDeleteScenario}
+              onExportJSON={handleExportJSON}
+              onImportJSON={handleImportJSON}
+              onRestoreLastValid={handleRestoreLastValid}
+              isDraftStale={isDraftStale}
+              autoApply={autoApply}
+              onToggleAutoApply={() => setAutoApply((prev) => !prev)}
+              savedScenarios={savedScenarios}
+              // Undo / Redo & Sensitivity
+              onUndo={handleUndo}
+              canUndo={undoStack.length > 0}
+              onRedo={handleRedo}
+              canRedo={redoStack.length > 0}
+              changedParams={changedParams}
+              onOpenSensitivity={() => setShowSensitivityDeck(true)}
+            />
+          )}
+        </div>
+
+        {/* Quick Link to Full Analysis Lab */}
+        <div className="w-full bg-[#0b0f1a] border border-[#1a2338] p-4 rounded-xs flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+          <div className="flex items-center gap-2">
+            <LineChart size={16} className="text-emerald-400" />
+            <span className="text-neutral-300">EXPLORE TRAJECTORY PLOTS, PARAMETER SWEEPS & HISTORICAL MISSIONS:</span>
+          </div>
+          <button
+            onClick={() => setActiveTab('ANALYSIS')}
+            className="px-3 py-1.5 bg-[#18233c] hover:bg-[#223154] text-emerald-300 rounded-xs border border-emerald-500/40 font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+          >
+            <span>OPEN FLIGHT DYNAMICS ANALYSIS LAB</span>
+            <TrendingUp size={13} />
+          </button>
+        </div>
+      </>
+    ) : (
+      /* 5. Analysis Area: Graphs, Comparisons & Experiments */
+      <div id="flyby-analysis-lab" className="flex flex-col gap-6 pt-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#0b0f1a] border border-[#1a2338] p-4 rounded-xs">
+          <div>
+            <h3 className="text-lg font-mono font-bold uppercase text-white flex items-center gap-2">
+              <LineChart size={18} className="text-emerald-400" />
+              <span>FLIGHT DYNAMICS ANALYSIS LAB & VERIFICATION</span>
+            </h3>
+            <p className="text-xs text-neutral-400 font-mono">
+              Real-time kinematic graphs, parameter sweeps, and archival mission comparisons.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveTab('SIMULATION')}
+              className="px-3 py-1.5 rounded-xs border font-mono text-xs flex items-center gap-1.5 transition-colors cursor-pointer bg-[#121622] text-neutral-300 border-[#232c42] hover:text-white"
+            >
+              <Orbit size={13} className="text-sky-400" />
+              <span>RETURN TO 3D VIEWPORT</span>
+            </button>
+            <button
+              onClick={() => setShowSensitivityDeck((prev) => !prev)}
+              className={`px-3 py-1.5 rounded-xs border font-mono text-xs flex items-center gap-1.5 transition-colors cursor-pointer ${
+                showSensitivityDeck
+                  ? 'bg-amber-500 text-black font-bold border-amber-400'
+                  : 'bg-[#18233c] text-neutral-200 border-[#232c42] hover:text-white'
+              }`}
+            >
+              <TrendingUp size={13} />
+              <span>{showSensitivityDeck ? 'HIDE SENSITIVITY SWEEPS' : 'PARAMETER SENSITIVITY SWEEP'}</span>
+            </button>
+          </div>
+        </div>
+
+        {showSensitivityDeck && (
+          <ParameterSensitivityDeck
+            scenario={scenario}
+            onClose={() => setShowSensitivityDeck(false)}
+          />
+        )}
+
+        {/* Real-Time Telemetry & Physics Charts */}
         <FlybyCharts
           simResult={simResult}
           currentPlaybackIndex={currentPlaybackIndex}
-          referenceFrame={referenceFrame}
+          referenceFrame={activeReferenceFrame}
         />
 
-        {/* 4. Controlled Astrodynamics Experiments (A — F) */}
+        {/* Controlled Astrodynamics Experiments (A — F) */}
         <FlybyExperiments onLoadPreset={handleLoadPreset} />
 
-        {/* 5. Historical Missions Dossier (Voyager 2, Cassini, Mariner 10) */}
+        {/* Historical Missions Dossier (Voyager 2, Cassini, Mariner 10) */}
         <FlybyMissions onLoadPreset={handleLoadPreset} />
+      </div>
+    )}
       </div>
     </section>
   );
