@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { Play, Pause, RotateCcw, ZoomIn, ZoomOut, Maximize2, Compass, Layers, Check } from 'lucide-react';
+import { Play, Pause, RotateCcw, ZoomIn, ZoomOut, Maximize2, Compass, Layers, AlertCircle, ArrowUpRight, Info } from 'lucide-react';
 import { FlybyScenarioConfig } from '../../../physics/FlybyScenario';
 import { FlybyEngine, FlybySimulationResult } from '../../../physics/FlybyEngine';
 import { TrajectoryInterpolator, InterpolatedState } from './TrajectoryInterpolator';
@@ -17,6 +17,115 @@ export interface GravityAssist2DSandboxProps {
   onPlaybackIndexChange: (index: number) => void;
   viewportMode: '2D' | '3D';
   onChangeViewportMode: (mode: '2D' | '3D') => void;
+}
+
+interface Bounds2D {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  midX: number;
+  midY: number;
+  spanX: number;
+  spanY: number;
+}
+
+/**
+ * Robustly computes the 2D bounding box of the complete Sun Frame trajectory,
+ * including moving planet positions, closest approach point, and arrow margins.
+ */
+function computeSunFrameBounds(simResult: FlybySimulationResult): Bounds2D {
+  const traj = simResult.trajectory;
+  const planetR = simResult.config.planet.radiusM;
+
+  if (!traj || traj.length === 0) {
+    const s = planetR * 10;
+    return { minX: -s, maxX: s, minY: -s, maxY: s, midX: 0, midY: 0, spanX: s * 2, spanY: s * 2 };
+  }
+
+  const originPlanetSun = traj[0].planetPosSunM;
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  for (let i = 0; i < traj.length; i++) {
+    const pt = traj[i];
+    // Spacecraft in Sun frame relative to encounter origin
+    const scX = pt.posSunM.x - originPlanetSun.x;
+    const scY = pt.posSunM.y - originPlanetSun.y;
+    if (scX < minX) minX = scX;
+    if (scX > maxX) maxX = scX;
+    if (scY < minY) minY = scY;
+    if (scY > maxY) maxY = scY;
+
+    // Moving Planet in Sun frame relative to encounter origin
+    const pX = pt.planetPosSunM.x - originPlanetSun.x;
+    const pY = pt.planetPosSunM.y - originPlanetSun.y;
+    if (pX - planetR * 1.5 < minX) minX = pX - planetR * 1.5;
+    if (pX + planetR * 1.5 > maxX) maxX = pX + planetR * 1.5;
+    if (pY - planetR * 1.5 < minY) minY = pY - planetR * 1.5;
+    if (pY + planetR * 1.5 > maxY) maxY = pY + planetR * 1.5;
+  }
+
+  // Include origin (0, 0)
+  if (0 < minX) minX = 0;
+  if (0 > maxX) maxX = 0;
+  if (0 < minY) minY = 0;
+  if (0 > maxY) maxY = 0;
+
+  // Prevent degenerate bounds
+  const spanX = Math.max(planetR * 6, maxX - minX);
+  const spanY = Math.max(planetR * 6, maxY - minY);
+  const midX = (minX + maxX) / 2;
+  const midY = (minY + maxY) / 2;
+
+  return { minX, maxX, minY, maxY, midX, midY, spanX, spanY };
+}
+
+/**
+ * Robustly computes the 2D bounding box of the Planet Frame trajectory,
+ * including origin (planet center), closest approach, and impact parameter offsets.
+ */
+function computePlanetFrameBounds(simResult: FlybySimulationResult): Bounds2D {
+  const traj = simResult.trajectory;
+  const planetR = simResult.config.planet.radiusM;
+
+  if (!traj || traj.length === 0) {
+    const s = planetR * 8;
+    return { minX: -s, maxX: s, minY: -s, maxY: s, midX: 0, midY: 0, spanX: s * 2, spanY: s * 2 };
+  }
+
+  let minX = -planetR * 2.0;
+  let maxX = planetR * 2.0;
+  let minY = -planetR * 2.0;
+  let maxY = planetR * 2.0;
+
+  for (let i = 0; i < traj.length; i++) {
+    const pt = traj[i];
+    if (pt.posPlanetM.x < minX) minX = pt.posPlanetM.x;
+    if (pt.posPlanetM.x > maxX) maxX = pt.posPlanetM.x;
+    if (pt.posPlanetM.y < minY) minY = pt.posPlanetM.y;
+    if (pt.posPlanetM.y > maxY) maxY = pt.posPlanetM.y;
+  }
+
+  // Include impact parameter line bounds
+  const bM = simResult.analytical.impactParameterM;
+  if (bM > 0) {
+    const bMargin = bM * 1.15;
+    if (-bMargin < minX) minX = -bMargin;
+    if (bMargin > maxX) maxX = bMargin;
+    if (-bMargin < minY) minY = -bMargin;
+    if (bMargin > maxY) maxY = bMargin;
+  }
+
+  const spanX = Math.max(planetR * 6, maxX - minX);
+  const spanY = Math.max(planetR * 6, maxY - minY);
+  const midX = (minX + maxX) / 2;
+  const midY = (minY + maxY) / 2;
+
+  return { minX, maxX, minY, maxY, midX, midY, spanX, spanY };
 }
 
 export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
@@ -47,12 +156,23 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
     }
   }, [simResult]);
 
+  // Stable bounds calculated ONLY when simResult changes (not per frame!)
+  const sunBounds = useMemo(() => computeSunFrameBounds(simResult), [simResult]);
+  const planetBounds = useMemo(() => computePlanetFrameBounds(simResult), [simResult]);
+
+  // Auto-fit tracking state: when true, automatic fitting centers and scales the plot
+  const [isAutoFitActive, setIsAutoFitActive] = useState<boolean>(true);
+
   // Shared Zoom Multiplier
   const [zoomMultiplier, setZoomMultiplier] = useState<number>(1.0);
 
-  // Independent Pan offsets for user exploration
+  // Independent Pan offsets for user manual navigation
   const [planetPan, setPlanetPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [sunPan, setSunPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Detection whether manual zoom/pan has clipped the trajectory
+  const [isSunClipped, setIsSunClipped] = useState<boolean>(false);
+  const [isPlanetClipped, setIsPlanetClipped] = useState<boolean>(false);
 
   // Drag tracking
   const isDraggingPlanetRef = useRef<boolean>(false);
@@ -71,6 +191,25 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
 
   const lastEmittedIndexRef = useRef<number>(-1);
 
+  // Refit Trajectory Action (resets manual pan/zoom to auto-fit view)
+  const handleRefitTrajectory = useCallback(() => {
+    setIsAutoFitActive(true);
+    setZoomMultiplier(1.0);
+    setPlanetPan({ x: 0, y: 0 });
+    setSunPan({ x: 0, y: 0 });
+    setIsSunClipped(false);
+    setIsPlanetClipped(false);
+  }, []);
+
+  // When simResult changes, if auto-fit is active, ensure view remains centered
+  useEffect(() => {
+    if (isAutoFitActive) {
+      setPlanetPan({ x: 0, y: 0 });
+      setSunPan({ x: 0, y: 0 });
+      setZoomMultiplier(1.0);
+    }
+  }, [simResult, isAutoFitActive]);
+
   // Synchronize internal continuous time on external scrub/step/pause
   useEffect(() => {
     if (simResult && simResult.trajectory.length > 0) {
@@ -86,10 +225,17 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
   }, [currentPlaybackIndex, simResult]);
 
   // Derived Trajectory Parameter values
-  const v0KmS = (scenario.planet.orbitalSpeedMPerS / 1000.0);
-  const vInfKmS = (scenario.encounter.vInfSpeedMPerS / 1000.0);
+  const v0KmS = scenario.planet.orbitalSpeedMPerS / 1000.0;
+  const vInfKmS = scenario.encounter.vInfSpeedMPerS / 1000.0;
   const thetaDeg = scenario.encounter.approachAngleDeg ?? 0;
   const bKm = scenario.encounter.impactParameterKm || (simResult.analytical.impactParameterM / 1000.0);
+
+  // Analytical outputs for scientific context
+  const deltaDeg = simResult.analytical.deflectionAngleDeg;
+  const vInSunSpeed = simResult.analytical.vInSunSpeedMPerS;
+  const vOutSunSpeed = simResult.analytical.vOutSunSpeedMPerS;
+  const deltaVSun = simResult.analytical.deltaVSunSpeedMPerS;
+  const isSpeedGain = deltaVSun >= 0;
 
   // Parameter Change Handlers
   const handleV0Change = (newV0KmS: number) => {
@@ -144,10 +290,6 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
       },
     }));
   };
-
-  // Reset View Pan
-  const handleResetPlanetView = () => setPlanetPan({ x: 0, y: 0 });
-  const handleResetSunView = () => setSunPan({ x: 0, y: 0 });
 
   // Main 60 FPS Dual-Canvas Animation & Rendering Loop
   useEffect(() => {
@@ -224,21 +366,38 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
       pCtx.fillStyle = '#FFFFFF';
       pCtx.fillRect(0, 0, pw, ph);
 
-      // Base Scale in Planet Frame: span ~ 16 planet radii across height
-      const pBaseSpanM = Math.max(planetRadiusM * 14.0, (simResult.analytical.impactParameterM || planetRadiusM * 3) * 2.6);
-      const pScale = (Math.min(pw, ph) / pBaseSpanM) * zoomMultiplier;
-      const pcx = pw / 2 + planetPan.x;
-      const pcy = ph / 2 + planetPan.y;
+      // Robust Auto-Fit Scale: 25% padding around full trajectory bounds
+      const pPaddedSpanX = planetBounds.spanX * 1.25;
+      const pPaddedSpanY = planetBounds.spanY * 1.25;
+      const pFitScale = Math.min(pw / pPaddedSpanX, ph / pPaddedSpanY);
+      const pScale = pFitScale * zoomMultiplier;
 
-      const pToScreenX = (wx: number) => pcx + wx * pScale;
-      const pToScreenY = (wy: number) => pcy - wy * pScale;
+      // Canvas Screen Coordinate Transforms (Isotropic & Non-distorting)
+      const pToScreenX = (wx: number) => pw / 2 + (wx - planetBounds.midX) * pScale + planetPan.x;
+      const pToScreenY = (wy: number) => ph / 2 - (wy - planetBounds.midY) * pScale + planetPan.y;
 
-      // Coordinate Grid & Distance Axis Lines
+      // Check clipping in manual mode
+      if (!isAutoFitActive) {
+        const isClipped =
+          pToScreenX(planetBounds.minX) < 10 ||
+          pToScreenX(planetBounds.maxX) > pw - 10 ||
+          pToScreenY(planetBounds.maxY) < 10 ||
+          pToScreenY(planetBounds.minY) > ph - 10;
+        setIsPlanetClipped(isClipped);
+      } else {
+        setIsPlanetClipped(false);
+      }
+
+      // Origin Screen Location (Planet Body at (0, 0))
+      const pcx = pToScreenX(0);
+      const pcy = pToScreenY(0);
+
+      // Subtle Background Grid
       pCtx.strokeStyle = '#F0F4FA';
       pCtx.lineWidth = 1;
       const gridSizePx = 45;
-      const pStartX = pcx % gridSizePx;
-      const pStartY = pcy % gridSizePx;
+      const pStartX = (pcx % gridSizePx + gridSizePx) % gridSizePx;
+      const pStartY = (pcy % gridSizePx + gridSizePx) % gridSizePx;
 
       pCtx.beginPath();
       for (let x = pStartX; x < pw; x += gridSizePx) {
@@ -264,22 +423,22 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
       // Distance Axis Ticks & Numerical Labels
       pCtx.font = '9px monospace';
       pCtx.fillStyle = '#94A3B8';
-      const tickStepM = planetRadiusM * 2.0;
-      const maxTicks = 6;
+      const pTickStepM = Math.max(planetRadiusM * 2.0, Math.pow(10, Math.floor(Math.log10(planetBounds.spanX / 6))));
+      const maxTicks = 8;
       for (let i = -maxTicks; i <= maxTicks; i++) {
         if (i === 0) continue;
-        const tx = pToScreenX(i * tickStepM);
-        const ty = pToScreenY(i * tickStepM);
-        const valKm = ((i * tickStepM) / 1000).toLocaleString(undefined, { maximumFractionDigits: 0 });
+        const tx = pToScreenX(i * pTickStepM);
+        const ty = pToScreenY(i * pTickStepM);
+        const valKm = ((i * pTickStepM) / 1000).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
-        if (tx >= 20 && tx <= pw - 20) {
+        if (tx >= 25 && tx <= pw - 25) {
           pCtx.beginPath();
           pCtx.moveTo(tx, pcy - 3);
           pCtx.lineTo(tx, pcy + 3);
           pCtx.stroke();
           pCtx.fillText(`${valKm}k`, tx - 12, pcy + 14);
         }
-        if (ty >= 20 && ty <= ph - 20) {
+        if (ty >= 25 && ty <= ph - 25) {
           pCtx.beginPath();
           pCtx.moveTo(pcx - 3, ty);
           pCtx.lineTo(pcx + 3, ty);
@@ -371,7 +530,6 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
       }
 
       // Deflection Angle (delta) Annotation
-      const deltaDeg = simResult.analytical.deflectionAngleDeg;
       if (deltaDeg > 0.5) {
         pCtx.save();
         pCtx.font = 'bold 10px monospace';
@@ -396,6 +554,14 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
       }
       pCtx.stroke();
 
+      // Incoming Label
+      if (periIndex > 0) {
+        const midIn = traj[Math.floor(periIndex * 0.4)];
+        pCtx.font = 'bold 9px monospace';
+        pCtx.fillStyle = '#1D4ED8';
+        pCtx.fillText('v_∞⁻ (INCOMING)', pToScreenX(midIn.posPlanetM.x) + 6, pToScreenY(midIn.posPlanetM.y) - 6);
+      }
+
       // Outgoing segment
       pCtx.strokeStyle = '#8B5CF6';
       pCtx.beginPath();
@@ -406,6 +572,14 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
         else pCtx.lineTo(sx, sy);
       }
       pCtx.stroke();
+
+      // Outgoing Label
+      if (traj.length > periIndex + 1) {
+        const midOut = traj[Math.floor(periIndex + (traj.length - periIndex) * 0.6)];
+        pCtx.font = 'bold 9px monospace';
+        pCtx.fillStyle = '#6D28D9';
+        pCtx.fillText('v_∞⁺ (OUTGOING)', pToScreenX(midOut.posPlanetM.x) + 6, pToScreenY(midOut.posPlanetM.y) - 6);
+      }
       pCtx.restore();
 
       // Planet Central Body (Pastel Sphere)
@@ -470,7 +644,7 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
       pCtx.stroke();
       pCtx.restore();
 
-      // Velocity Vector Arrow in Planet Frame (Strictly ||v_inf|| Conserved)
+      // Velocity Vector Arrow in Planet Frame
       if (state.speedPlanetMPerS > 10) {
         pCtx.save();
         const vLenPx = Math.min(65, Math.max(22, (state.speedPlanetMPerS / 1000) * 2.0));
@@ -485,7 +659,6 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
         pCtx.lineTo(vEndX, vEndY);
         pCtx.stroke();
 
-        // Arrow tip
         const arrowSz = 6;
         pCtx.beginPath();
         pCtx.moveTo(vEndX, vEndY);
@@ -519,20 +692,38 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
       sCtx.fillStyle = '#FFFFFF';
       sCtx.fillRect(0, 0, sw, sh);
 
-      // Base Scale in Sun Frame: spans the entire heliocentric flyby arc
-      const sBaseSpanM = Math.max(planetRadiusM * 20.0, (simResult.analytical.impactParameterM || planetRadiusM * 3) * 3.5);
-      const sScale = (Math.min(sw, sh) / sBaseSpanM) * zoomMultiplier;
-      const scx = sw / 2 + sunPan.x;
-      const scy = sh / 2 + sunPan.y;
+      // Robust Auto-Fit Scale: 30% padding around full Sun frame bounds
+      // (Leaves ample space for telemetry overlay and vector arrows)
+      const sPaddedSpanX = sunBounds.spanX * 1.30;
+      const sPaddedSpanY = sunBounds.spanY * 1.30;
+      const sFitScale = Math.min(sw / sPaddedSpanX, sh / sPaddedSpanY);
+      const sScale = sFitScale * zoomMultiplier;
 
-      const sToScreenX = (wx: number) => scx + wx * sScale;
-      const sToScreenY = (wy: number) => scy - wy * sScale;
+      // Canvas Screen Coordinate Transforms (Isotropic & Non-distorting)
+      const sToScreenX = (wx: number) => sw / 2 + (wx - sunBounds.midX) * sScale + sunPan.x;
+      const sToScreenY = (wy: number) => sh / 2 - (wy - sunBounds.midY) * sScale + sunPan.y;
+
+      // Check clipping in manual mode
+      if (!isAutoFitActive) {
+        const isClipped =
+          sToScreenX(sunBounds.minX) < 10 ||
+          sToScreenX(sunBounds.maxX) > sw - 10 ||
+          sToScreenY(sunBounds.maxY) < 10 ||
+          sToScreenY(sunBounds.minY) > sh - 10;
+        setIsSunClipped(isClipped);
+      } else {
+        setIsSunClipped(false);
+      }
+
+      // Origin Screen Location (Planet at t=0)
+      const scx = sToScreenX(0);
+      const scy = sToScreenY(0);
 
       // Coordinate Grid
       sCtx.strokeStyle = '#F0F4FA';
       sCtx.lineWidth = 1;
-      const sStartX = scx % gridSizePx;
-      const sStartY = scy % gridSizePx;
+      const sStartX = (scx % gridSizePx + gridSizePx) % gridSizePx;
+      const sStartY = (scy % gridSizePx + gridSizePx) % gridSizePx;
 
       sCtx.beginPath();
       for (let x = sStartX; x < sw; x += gridSizePx) {
@@ -558,20 +749,21 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
       // Axis Ticks
       sCtx.font = '9px monospace';
       sCtx.fillStyle = '#94A3B8';
+      const sTickStepM = Math.max(planetRadiusM * 2.0, Math.pow(10, Math.floor(Math.log10(sunBounds.spanX / 6))));
       for (let i = -maxTicks; i <= maxTicks; i++) {
         if (i === 0) continue;
-        const tx = sToScreenX(i * tickStepM);
-        const ty = sToScreenY(i * tickStepM);
-        const valKm = ((i * tickStepM) / 1000).toLocaleString(undefined, { maximumFractionDigits: 0 });
+        const tx = sToScreenX(i * sTickStepM);
+        const ty = sToScreenY(i * sTickStepM);
+        const valKm = ((i * sTickStepM) / 1000).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
-        if (tx >= 20 && tx <= sw - 20) {
+        if (tx >= 25 && tx <= sw - 25) {
           sCtx.beginPath();
           sCtx.moveTo(tx, scy - 3);
           sCtx.lineTo(tx, scy + 3);
           sCtx.stroke();
           sCtx.fillText(`${valKm}k`, tx - 12, scy + 14);
         }
-        if (ty >= 20 && ty <= sh - 20) {
+        if (ty >= 25 && ty <= sh - 25) {
           sCtx.beginPath();
           sCtx.moveTo(scx - 3, ty);
           sCtx.lineTo(scx + 3, ty);
@@ -672,9 +864,9 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
       sCtx.fillRect(-2, -8, 4, 16);
 
       // Probe Hull
-      sCtx.fillStyle = '#F4B58C';
-      sCtx.strokeStyle = '#C2410C';
-      sCtx.lineWidth = 1.2;
+      pCtx.fillStyle = '#F4B58C';
+      pCtx.strokeStyle = '#C2410C';
+      pCtx.lineWidth = 1.2;
       sCtx.beginPath();
       sCtx.moveTo(7, 0);
       sCtx.lineTo(-5, -4);
@@ -734,7 +926,7 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
       const hudY = 12;
 
       sCtx.save();
-      sCtx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+      sCtx.fillStyle = 'rgba(255, 255, 255, 0.94)';
       sCtx.strokeStyle = '#DCE3EE';
       sCtx.lineWidth = 1;
       sCtx.beginPath();
@@ -773,16 +965,20 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
     };
   }, [
     simResult,
+    sunBounds,
+    planetBounds,
     zoomMultiplier,
     planetPan,
     sunPan,
+    isAutoFitActive,
     onPlaybackIndexChange,
   ]);
 
-  // Planet Canvas Drag Handlers
+  // Planet Canvas Drag & Wheel Handlers
   const handlePlanetMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     isDraggingPlanetRef.current = true;
     lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+    setIsAutoFitActive(false);
   };
 
   const handlePlanetMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -797,10 +993,18 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
     isDraggingPlanetRef.current = false;
   };
 
-  // Sun Canvas Drag Handlers
+  const handlePlanetWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    setIsAutoFitActive(false);
+    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    setZoomMultiplier((prev) => Math.max(0.2, Math.min(6.0, prev * factor)));
+  };
+
+  // Sun Canvas Drag & Wheel Handlers
   const handleSunMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     isDraggingSunRef.current = true;
     lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+    setIsAutoFitActive(false);
   };
 
   const handleSunMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -815,6 +1019,13 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
     isDraggingSunRef.current = false;
   };
 
+  const handleSunWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    setIsAutoFitActive(false);
+    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    setZoomMultiplier((prev) => Math.max(0.2, Math.min(6.0, prev * factor)));
+  };
+
   return (
     <div className="w-full flex flex-col gap-6 select-none font-sans">
       {/* 1. Header with Centered Title & View Selector */}
@@ -822,7 +1033,7 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
         <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[#263247] uppercase text-center">
           Gravity Assist Sandbox
         </h2>
-        
+
         {/* View Mode Selector (2D Default vs 3D Optional) */}
         <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#DCE3EE] shadow-xs">
           <button
@@ -868,7 +1079,7 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
             <div className="flex flex-col gap-1">
               <div className="flex justify-between items-center text-xs font-mono">
                 <span className="text-[#68758A]">
-                  <strong className="text-[#263247]">v₀</strong> (planet velocity)
+                  <strong className="text-[#263247]">v₀</strong> (planet orbital velocity along +Y)
                 </span>
                 <span className="font-bold text-[#10B981]">{v0KmS.toFixed(1)} km/s</span>
               </div>
@@ -887,7 +1098,7 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
             <div className="flex flex-col gap-1">
               <div className="flex justify-between items-center text-xs font-mono">
                 <span className="text-[#68758A]">
-                  <strong className="text-[#263247]">v_∞</strong> (incoming probe velocity)
+                  <strong className="text-[#263247]">v_∞</strong> (incoming hyperbolic excess speed)
                 </span>
                 <span className="font-bold text-[#0284C7]">{vInfKmS.toFixed(1)} km/s</span>
               </div>
@@ -906,7 +1117,7 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
             <div className="flex flex-col gap-1">
               <div className="flex justify-between items-center text-xs font-mono">
                 <span className="text-[#68758A]">
-                  <strong className="text-[#263247]">θ</strong> (approach direction)
+                  <strong className="text-[#263247]">θ</strong> (approach angle relative to +X axis)
                 </span>
                 <span className="font-bold text-[#7C3AED]">{thetaDeg.toFixed(1)}°</span>
               </div>
@@ -919,6 +1130,52 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
                 onChange={(e) => handleThetaChange(parseFloat(e.target.value))}
                 className="w-full accent-[#7C3AED] cursor-pointer h-1.5 bg-[#EEF2F8] rounded-lg"
               />
+            </div>
+
+            {/* Scientific Explanation Context Card for Theta */}
+            <div className="bg-[#F8FAFC] border border-[#DCE3EE] rounded-lg p-3 flex flex-col gap-2 text-xs font-mono">
+              <div className="flex items-center justify-between text-[11px] font-bold text-[#475569]">
+                <span className="flex items-center gap-1.5 text-[#4338CA]">
+                  <Compass size={13} />
+                  APPROACH ANGLE (θ) GEOMETRY CONTEXT
+                </span>
+                <span className="text-[#059669]">
+                  Δv = {isSpeedGain ? '+' : ''}{(deltaVSun / 1000.0).toFixed(2)} km/s
+                </span>
+              </div>
+
+              <p className="text-[11px] text-[#475569] leading-relaxed">
+                <strong className="text-[#1E293B]">Model Convention:</strong> θ is the in-plane incoming direction angle relative to the <strong className="text-[#1E293B]">+X axis</strong>, while the planet moves along <strong className="text-[#059669]">+Y</strong> at <strong className="text-[#059669]">{v0KmS.toFixed(1)} km/s</strong>.
+              </p>
+
+              <div className="grid grid-cols-2 gap-2 text-[10px] bg-white p-2 rounded border border-[#E2E8F0]">
+                <div>
+                  <span className="text-[#64748B]">Deflection: </span>
+                  <strong className="text-[#7C3AED]">δ = {deltaDeg.toFixed(1)}°</strong>
+                </div>
+                <div>
+                  <span className="text-[#64748B]">v_∞⁻ Vector: </span>
+                  <strong>({(vInfKmS * Math.cos(thetaDeg * Math.PI / 180.0)).toFixed(1)}, {(vInfKmS * Math.sin(thetaDeg * Math.PI / 180.0)).toFixed(1)})</strong>
+                </div>
+                <div>
+                  <span className="text-[#64748B]">v_sun(in): </span>
+                  <strong className="text-[#0284C7]">{(vInSunSpeed / 1000.0).toFixed(1)} km/s</strong>
+                </div>
+                <div>
+                  <span className="text-[#64748B]">v_sun(out): </span>
+                  <strong className={isSpeedGain ? 'text-[#059669]' : 'text-[#DC2626]'}>
+                    {(vOutSunSpeed / 1000.0).toFixed(1)} km/s
+                  </strong>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-[#334155] italic">
+                {Math.abs(deltaVSun) < 50
+                  ? 'Symmetric encounter: Deflection produces negligible net change in heliocentric speed.'
+                  : isSpeedGain
+                  ? 'Trailing pass: Spacecraft is deflected forward into the planet’s orbital direction (+Y), delivering a heliocentric speed boost (+Δv).'
+                  : 'Leading pass: Spacecraft is deflected backward against the planet’s motion (-Y), exerting a heliocentric gravitational brake (-Δv).'}
+              </p>
             </div>
 
             {/* b: Impact Parameter */}
@@ -950,21 +1207,31 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
             <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#263247]">
               View & Animation
             </span>
-            <span className="text-[11px] font-mono text-[#68758A]">
-              STATUS: {isPlaying ? 'RUNNING' : 'PAUSED'}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md font-bold ${
+                isAutoFitActive ? 'bg-[#ECFDF5] text-[#059669]' : 'bg-[#FFFBEB] text-[#B45309]'
+              }`}>
+                {isAutoFitActive ? 'AUTO-FIT ACTIVE' : 'MANUAL VIEWPORT'}
+              </span>
+              <span className="text-[11px] font-mono text-[#68758A]">
+                {isPlaying ? 'RUNNING' : 'PAUSED'}
+              </span>
+            </div>
           </div>
 
           <div className="flex flex-col gap-3.5">
             {/* Zoom Slider */}
             <div className="flex flex-col gap-1">
               <div className="flex justify-between items-center text-xs font-mono">
-                <span className="text-[#68758A]">Zoom level</span>
+                <span className="text-[#68758A]">Zoom level multiplier</span>
                 <span className="font-bold text-[#263247]">{zoomMultiplier.toFixed(2)}x</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setZoomMultiplier((z) => Math.max(0.3, z - 0.2))}
+                  onClick={() => {
+                    setIsAutoFitActive(false);
+                    setZoomMultiplier((z) => Math.max(0.3, z - 0.2));
+                  }}
                   className="p-1 rounded bg-[#EEF2F8] hover:bg-[#E2E8F0] text-[#263247] cursor-pointer transition-colors"
                   title="Zoom Out"
                 >
@@ -976,11 +1243,17 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
                   max="4.0"
                   step="0.05"
                   value={zoomMultiplier}
-                  onChange={(e) => setZoomMultiplier(parseFloat(e.target.value))}
+                  onChange={(e) => {
+                    setIsAutoFitActive(false);
+                    setZoomMultiplier(parseFloat(e.target.value));
+                  }}
                   className="flex-1 accent-[#263247] cursor-pointer h-1.5 bg-[#EEF2F8] rounded-lg"
                 />
                 <button
-                  onClick={() => setZoomMultiplier((z) => Math.min(4.0, z + 0.2))}
+                  onClick={() => {
+                    setIsAutoFitActive(false);
+                    setZoomMultiplier((z) => Math.min(4.0, z + 0.2));
+                  }}
                   className="p-1 rounded bg-[#EEF2F8] hover:bg-[#E2E8F0] text-[#263247] cursor-pointer transition-colors"
                   title="Zoom In"
                 >
@@ -992,7 +1265,7 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
             {/* Animation Speed Slider */}
             <div className="flex flex-col gap-1">
               <div className="flex justify-between items-center text-xs font-mono">
-                <span className="text-[#68758A]">Animation speed</span>
+                <span className="text-[#68758A]">Animation speed multiplier</span>
                 <span className="font-bold text-[#263247]">{playbackSpeed.toFixed(2)}x</span>
               </div>
               <input
@@ -1017,8 +1290,8 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
               <span className="text-[#263247] font-bold">Enable Animation</span>
             </label>
 
-            {/* Clear Playback Controls */}
-            <div className="flex items-center gap-3 pt-2">
+            {/* Playback Controls & Fit Trajectory */}
+            <div className="flex flex-wrap items-center gap-2 pt-2">
               <button
                 onClick={onTogglePlay}
                 className={`px-4 py-2 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors ${
@@ -1038,6 +1311,19 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
                 <RotateCcw size={14} />
                 Reset
               </button>
+
+              <button
+                onClick={handleRefitTrajectory}
+                className={`px-3 py-2 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors border ${
+                  isAutoFitActive
+                    ? 'bg-[#ECFDF5] text-[#059669] border-[#A7F3D0]'
+                    : 'bg-[#FFFBEB] hover:bg-[#FEF3C7] text-[#B45309] border-[#FDE68A]'
+                }`}
+                title="Fit complete trajectory to viewport"
+              >
+                <Maximize2 size={13} />
+                Fit Trajectory
+              </button>
             </div>
           </div>
         </div>
@@ -1052,27 +1338,40 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
               <span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6]" />
               <span className="font-bold text-[#263247]">Planet Frame</span>
               <span className="text-[10px] bg-[#EFF6FF] text-[#1E40AF] px-1.5 py-0.5 rounded font-bold">
-                ||v_∞|| CONSERVED
+                ||v_∞|| CONSERVED (PLANET AT REST)
               </span>
             </div>
 
-            <button
-              onClick={handleResetPlanetView}
-              className="text-[11px] font-mono text-[#68758A] hover:text-[#263247] flex items-center gap-1 bg-white px-2 py-1 rounded border border-[#DCE3EE] shadow-2xs transition-colors cursor-pointer"
-              title="Reset Planet Center View"
-            >
-              <Maximize2 size={11} />
-              Center
-            </button>
+            <div className="flex items-center gap-2">
+              {isPlanetClipped && (
+                <button
+                  onClick={handleRefitTrajectory}
+                  className="text-[10px] font-mono text-[#B45309] bg-[#FFFBEB] border border-[#FDE68A] px-2 py-0.5 rounded flex items-center gap-1 hover:bg-[#FEF3C7] cursor-pointer"
+                  title="Trajectory extends outside visible region. Click to refit."
+                >
+                  <AlertCircle size={11} />
+                  Refit View
+                </button>
+              )}
+              <button
+                onClick={handleRefitTrajectory}
+                className="text-[11px] font-mono text-[#68758A] hover:text-[#263247] flex items-center gap-1 bg-white px-2 py-1 rounded border border-[#DCE3EE] shadow-2xs transition-colors cursor-pointer"
+                title="Fit complete trajectory and center planet"
+              >
+                <Maximize2 size={11} />
+                Fit View
+              </button>
+            </div>
           </div>
 
-          <div className="relative w-full h-[500px]">
+          <div className="relative w-full h-[520px]">
             <canvas
               ref={planetCanvasRef}
               onMouseDown={handlePlanetMouseDown}
               onMouseMove={handlePlanetMouseMove}
               onMouseUp={handlePlanetMouseUp}
               onMouseLeave={handlePlanetMouseUp}
+              onWheel={handlePlanetWheel}
               className="w-full h-full cursor-grab active:cursor-grabbing block"
             />
           </div>
@@ -1085,27 +1384,40 @@ export const GravityAssist2DSandbox: React.FC<GravityAssist2DSandboxProps> = ({
               <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" />
               <span className="font-bold text-[#263247]">Sun Frame</span>
               <span className="text-[10px] bg-[#ECFDF5] text-[#065F46] px-1.5 py-0.5 rounded font-bold">
-                MOMENTUM TRANSFER
+                MOMENTUM TRANSFER (v_sun = v₀ + v_rel)
               </span>
             </div>
 
-            <button
-              onClick={handleResetSunView}
-              className="text-[11px] font-mono text-[#68758A] hover:text-[#263247] flex items-center gap-1 bg-white px-2 py-1 rounded border border-[#DCE3EE] shadow-2xs transition-colors cursor-pointer"
-              title="Reset Sun Frame View"
-            >
-              <Maximize2 size={11} />
-              Center
-            </button>
+            <div className="flex items-center gap-2">
+              {isSunClipped && (
+                <button
+                  onClick={handleRefitTrajectory}
+                  className="text-[10px] font-mono text-[#B45309] bg-[#FFFBEB] border border-[#FDE68A] px-2 py-0.5 rounded flex items-center gap-1 hover:bg-[#FEF3C7] cursor-pointer"
+                  title="Trajectory extends outside visible region. Click to refit."
+                >
+                  <AlertCircle size={11} />
+                  Refit View
+                </button>
+              )}
+              <button
+                onClick={handleRefitTrajectory}
+                className="text-[11px] font-mono text-[#68758A] hover:text-[#263247] flex items-center gap-1 bg-white px-2 py-1 rounded border border-[#DCE3EE] shadow-2xs transition-colors cursor-pointer"
+                title="Fit complete heliocentric trajectory"
+              >
+                <Maximize2 size={11} />
+                Fit View
+              </button>
+            </div>
           </div>
 
-          <div className="relative w-full h-[500px]">
+          <div className="relative w-full h-[520px]">
             <canvas
               ref={sunCanvasRef}
               onMouseDown={handleSunMouseDown}
               onMouseMove={handleSunMouseMove}
               onMouseUp={handleSunMouseUp}
               onMouseLeave={handleSunMouseUp}
+              onWheel={handleSunWheel}
               className="w-full h-full cursor-grab active:cursor-grabbing block"
             />
           </div>
