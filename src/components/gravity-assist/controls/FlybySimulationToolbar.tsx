@@ -9,12 +9,18 @@ import {
   Sliders,
   ChevronDown,
   ChevronUp,
+  Orbit,
+  Box,
 } from 'lucide-react';
 import { FlybyCameraMode } from '../viewport/Flyby3DCanvas';
 
 export type ViewFrameMode = 'PLANET_CENTRIC' | 'HELIOCENTRIC' | 'SIDE_BY_SIDE';
 
 export interface FlybySimulationToolbarProps {
+  // Viewport 2D Default vs 3D Optional Mode
+  viewportMode?: '2D' | '3D';
+  onChangeViewportMode?: (mode: '2D' | '3D') => void;
+
   // Playback state
   isPlaying: boolean;
   onTogglePlay: () => void;
@@ -55,6 +61,8 @@ export interface FlybySimulationToolbarProps {
 const PLAYBACK_SPEEDS = [0.25, 0.5, 1.0, 2.0, 5.0, 10.0];
 
 export const FlybySimulationToolbar: React.FC<FlybySimulationToolbarProps> = ({
+  viewportMode = '2D',
+  onChangeViewportMode,
   isPlaying,
   onTogglePlay,
   onReset,
@@ -195,6 +203,36 @@ export const FlybySimulationToolbar: React.FC<FlybySimulationToolbarProps> = ({
             <span>◫</span> SIDE-BY-SIDE
           </button>
         </div>
+
+        {/* 2D Default vs 3D Optional Mode Selector */}
+        {onChangeViewportMode && (
+          <div className="flex items-center gap-1 bg-[#EEF2F8] p-1 rounded-lg border border-[#DCE3EE] text-[11px]">
+            <button
+              onClick={() => onChangeViewportMode('2D')}
+              className={`px-2.5 py-1 rounded-md font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                viewportMode === '2D'
+                  ? 'bg-[#AEE5D0] text-[#1D6C50] shadow-2xs'
+                  : 'text-[#68758A] hover:text-[#263247]'
+              }`}
+              title="Primary lightweight 2D orbital visualization"
+            >
+              <Orbit size={13} className="text-[#1D6C50]" />
+              <span>2D — DEFAULT</span>
+            </button>
+            <button
+              onClick={() => onChangeViewportMode('3D')}
+              className={`px-2.5 py-1 rounded-md font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                viewportMode === '3D'
+                  ? 'bg-[#C9BDF2] text-[#4A347F] shadow-2xs'
+                  : 'text-[#68758A] hover:text-[#263247]'
+              }`}
+              title="Optional Three.js 3D perspective"
+            >
+              <Box size={13} className="text-[#8B5CF6]" />
+              <span>3D — OPTIONAL</span>
+            </button>
+          </div>
+        )}
 
         {/* Right: Camera Mode & Parameter Panel Toggle */}
         <div className="flex items-center gap-2">

@@ -15,6 +15,8 @@ import {
   ZoomOut,
   Crosshair,
   ShieldAlert,
+  Orbit,
+  Box,
 } from 'lucide-react';
 import { WebGLFallbackDisplay } from './WebGLFallbackDisplay';
 
@@ -22,6 +24,8 @@ export type FlybyCameraMode = 'OVERVIEW' | 'CLOSE_UP' | 'PROBE_FOLLOW' | 'FREE';
 export type GraphicsQuality = 'HIGH' | 'BALANCED' | 'PERFORMANCE';
 
 export interface Flyby3DCanvasProps {
+  viewportMode?: '2D' | '3D';
+  onChangeViewportMode?: (mode: '2D' | '3D') => void;
   simResult: FlybySimulationResult | null;
   currentPlaybackIndex: number;
   referenceFrame: ReferenceFrame;
@@ -45,6 +49,8 @@ export interface Flyby3DCanvasProps {
 }
 
 export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
+  viewportMode = '3D',
+  onChangeViewportMode,
   simResult,
   currentPlaybackIndex,
   referenceFrame,
@@ -902,6 +908,36 @@ export const Flyby3DCanvas: React.FC<Flyby3DCanvasProps> = ({
 
       {/* Top-Right Viewport Controls (Pastel UI buttons) */}
       <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10 font-mono text-[11px]">
+        {/* 2D vs 3D View Switcher */}
+        {onChangeViewportMode && (
+          <div className="flex items-center gap-1 bg-white/95 backdrop-blur-md p-1 rounded-lg border border-[#DCE3EE] shadow-xs font-mono text-xs mr-1">
+            <button
+              onClick={() => onChangeViewportMode('2D')}
+              className={`px-3 py-1 rounded-md font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewportMode === '2D'
+                  ? 'bg-[#AEE5D0] text-[#1D6C50] shadow-xs'
+                  : 'text-[#68758A] hover:text-[#263247]'
+              }`}
+              title="Switch to lightweight 2D view"
+            >
+              <Orbit size={13} className="text-[#1D6C50]" />
+              <span>2D — DEFAULT</span>
+            </button>
+            <button
+              onClick={() => onChangeViewportMode('3D')}
+              className={`px-3 py-1 rounded-md font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewportMode === '3D'
+                  ? 'bg-[#C9BDF2] text-[#4A347F] shadow-xs'
+                  : 'text-[#68758A] hover:text-[#263247]'
+              }`}
+              title="Active Three.js 3D perspective"
+            >
+              <Box size={13} className="text-[#8B5CF6]" />
+              <span>3D — OPTIONAL</span>
+            </button>
+          </div>
+        )}
+
         {/* Reset Camera */}
         <button
           onClick={handleResetCamera}

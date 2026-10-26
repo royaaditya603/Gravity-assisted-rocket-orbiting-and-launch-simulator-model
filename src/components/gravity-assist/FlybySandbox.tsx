@@ -22,6 +22,7 @@ import {
   detectScenarioChanges,
 } from '../../physics/FlybyScenario';
 import { Flyby3DCanvas, FlybyCameraMode } from './viewport/Flyby3DCanvas';
+import { Flyby2DCanvas } from './viewport/Flyby2DCanvas';
 import { FlybyControlDeck } from './controls/FlybyControlDeck';
 import { FlybySimulationToolbar, ViewFrameMode } from './controls/FlybySimulationToolbar';
 import { ParameterSensitivityDeck } from './controls/ParameterSensitivityDeck';
@@ -66,6 +67,7 @@ export const FlybySandbox: React.FC<FlybySandboxProps> = ({
   const [savedScenarios, setSavedScenarios] = useState<FlybyScenarioConfig[]>(() => loadSavedScenarios());
 
   // View & Playback State
+  const [viewportMode, setViewportMode] = useState<'2D' | '3D'>('2D');
   const [viewFrameMode, setViewFrameMode] = useState<ViewFrameMode>('PLANET_CENTRIC');
   const [cameraMode, setCameraMode] = useState<FlybyCameraMode>('OVERVIEW');
   const [showVectors, setShowVectors] = useState<boolean>(true);
@@ -409,6 +411,8 @@ export const FlybySandbox: React.FC<FlybySandboxProps> = ({
           <>
             {/* 1. Simulation Toolbar */}
             <FlybySimulationToolbar
+          viewportMode={viewportMode}
+          onChangeViewportMode={setViewportMode}
           isPlaying={isPlaying}
           onTogglePlay={handleTogglePlay}
           onReset={handleReset}
@@ -436,9 +440,61 @@ export const FlybySandbox: React.FC<FlybySandboxProps> = ({
           onToggleParamsCollapse={() => setIsParamsCollapsed((prev) => !prev)}
         />
 
-        {/* 2. Trajectory Viewport (Single or Side-by-Side Split View) */}
+        {/* 2. Trajectory Viewport (Single or Side-by-Side Split View; 2D Primary or 3D Optional) */}
         <div className="w-full flex flex-col gap-3">
-          {viewFrameMode === 'SIDE_BY_SIDE' ? (
+          {viewportMode === '2D' ? (
+            viewFrameMode === 'SIDE_BY_SIDE' ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 w-full">
+                {/* Left Viewport: Planet-Relative Rest Frame */}
+                <Flyby2DCanvas
+                  simResult={simResult}
+                  currentPlaybackIndex={currentPlaybackIndex}
+                  referenceFrame="PLANET_CENTRIC"
+                  showVectors={showVectors}
+                  showTrajectoryTrail={showTrajectoryTrail}
+                  isPlaying={isPlaying}
+                  playbackSpeed={playbackSpeed}
+                  onPlaybackIndexChange={handleSeek}
+                  viewportMode={viewportMode}
+                  onChangeViewportMode={setViewportMode}
+                  title="PLANET-RELATIVE FRAME (||v_∞|| CONSERVED)"
+                  heightClass="h-[520px]"
+                />
+
+                {/* Right Viewport: Sun-Relative Heliocentric Frame */}
+                <Flyby2DCanvas
+                  simResult={simResult}
+                  currentPlaybackIndex={currentPlaybackIndex}
+                  referenceFrame="HELIOCENTRIC"
+                  showVectors={showVectors}
+                  showTrajectoryTrail={showTrajectoryTrail}
+                  isPlaying={isPlaying}
+                  playbackSpeed={playbackSpeed}
+                  onPlaybackIndexChange={handleSeek}
+                  viewportMode={viewportMode}
+                  onChangeViewportMode={setViewportMode}
+                  title="SUN-RELATIVE HELIOCENTRIC FRAME (MOMENTUM TRANSFER)"
+                  heightClass="h-[520px]"
+                />
+              </div>
+            ) : (
+              <Flyby2DCanvas
+                simResult={simResult}
+                currentPlaybackIndex={currentPlaybackIndex}
+                referenceFrame={activeReferenceFrame}
+                showVectors={showVectors}
+                showTrajectoryTrail={showTrajectoryTrail}
+                isPlaying={isPlaying}
+                playbackSpeed={playbackSpeed}
+                onPlaybackIndexChange={handleSeek}
+                onReferenceFrameChange={(f) => setViewFrameMode(f)}
+                viewportMode={viewportMode}
+                onChangeViewportMode={setViewportMode}
+                title={viewFrameMode === 'PLANET_CENTRIC' ? 'PLANET-CENTRIC REST FRAME' : 'HELIOCENTRIC SUN FRAME'}
+                heightClass="h-[580px]"
+              />
+            )
+          ) : viewFrameMode === 'SIDE_BY_SIDE' ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 w-full">
               {/* Left Viewport: Planet-Relative Rest Frame */}
               <Flyby3DCanvas
@@ -456,6 +512,8 @@ export const FlybySandbox: React.FC<FlybySandboxProps> = ({
                 reducedMotion={reducedMotion}
                 spacecraftModel={spacecraftModel}
                 onChangeSpacecraftModel={onChangeSpacecraftModel}
+                viewportMode={viewportMode}
+                onChangeViewportMode={setViewportMode}
                 title="PLANET-RELATIVE FRAME (||v_∞|| CONSERVED)"
                 heightClass="h-[520px]"
               />
@@ -476,6 +534,8 @@ export const FlybySandbox: React.FC<FlybySandboxProps> = ({
                 reducedMotion={reducedMotion}
                 spacecraftModel={spacecraftModel}
                 onChangeSpacecraftModel={onChangeSpacecraftModel}
+                viewportMode={viewportMode}
+                onChangeViewportMode={setViewportMode}
                 title="SUN-RELATIVE HELIOCENTRIC FRAME (MOMENTUM TRANSFER)"
                 heightClass="h-[520px]"
               />
@@ -497,6 +557,8 @@ export const FlybySandbox: React.FC<FlybySandboxProps> = ({
               reducedMotion={reducedMotion}
               spacecraftModel={spacecraftModel}
               onChangeSpacecraftModel={onChangeSpacecraftModel}
+              viewportMode={viewportMode}
+              onChangeViewportMode={setViewportMode}
               title={viewFrameMode === 'PLANET_CENTRIC' ? 'PLANET-CENTRIC REST FRAME' : 'HELIOCENTRIC SUN FRAME'}
               heightClass="h-[580px]"
             />
